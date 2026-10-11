@@ -47,6 +47,16 @@ class RealVideoCompiler:
                 str(out_shot)
             ]
         else:
+            try:
+                from PIL import Image
+                Image.MAX_IMAGE_PIXELS = None
+                with Image.open(media_path) as im:
+                    if im.width > 2560 or im.height > 1440:
+                        im.thumbnail((2560, 1440), Image.Resampling.LANCZOS)
+                        im.convert("RGB").save(media_path, format="JPEG", quality=92)
+            except Exception:
+                pass
+
             d_frames = int(duration * 30) + 30
             sw, sh = (int(self.w * 1.3), int(self.h * 1.3))
             fc = (
@@ -111,6 +121,16 @@ class RealVideoCompiler:
                     str(beat_clip_path)
                 ]
             else:
+                try:
+                    from PIL import Image
+                    Image.MAX_IMAGE_PIXELS = None
+                    with Image.open(media_path) as im:
+                        if im.width > 2560 or im.height > 1440:
+                            im.thumbnail((2560, 1440), Image.Resampling.LANCZOS)
+                            im.convert("RGB").save(media_path, format="JPEG", quality=92)
+                except Exception:
+                    pass
+
                 d_frames = int(b_dur * 30) + 15
                 sw, sh = (int(self.w * 1.25), int(self.h * 1.25))
                 motion_mode = b_idx % 4

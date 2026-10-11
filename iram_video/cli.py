@@ -77,6 +77,7 @@ def main():
     parser.add_argument("--scenes", type=int, default=None, help="Desired scene count (default: auto)")
     parser.add_argument("--music", default="auto", choices=["auto", "documentary", "acoustic", "lofi", "tech", "ambient", "trailer", "cinematic", "cyber", "none"], help="Background music mood (default: documentary for real/youtube, cyber for tech, trailer for cinema)")
     parser.add_argument("--style", default=None, help="Style hint for the director (e.g. 'documentary', 'realistic', 'vox style', 'educational')")
+    parser.add_argument("--no-thumbnail", action="store_true", help="Skip thumbnail generation")
     parser.add_argument("--generator", default="auto", choices=["auto", "veo", "fal", "wan", "replicate", "kling", "stock"], help="Video generator backend with cascading fallback: 'auto' (Veo -> Fal -> Replicate -> Stock), 'veo', 'wan', 'stock'")
     parser.add_argument("--veo", dest="generator_veo", action="store_true", help="Prioritize Google Veo 3.1 / 2.0 generative video synthesis")
     parser.add_argument("--ai-video", dest="ai_video", action="store_true", help="Enable AI generative video synthesis with automatic multi-tier fallback")

@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from PIL import Image, ImageDraw
 
+# Allow Pillow to downscale ultra-high resolution public domain photography (> 89 megapixels)
+Image.MAX_IMAGE_PIXELS = None
+
 USER_AGENT = "IramVideoEngine/2.0 (Documentary B-Roll Engine; educational)"
 
 class MediaFetcher:
