@@ -7,9 +7,10 @@ from PIL import Image, ImageDraw
 
 from .environments import EnvironmentRenderer
 from .characters import CharacterRenderer
-from .renderer import get_fonts, draw_mixed_line, wrap_text
+from .renderer import get_fonts, draw_mixed_line, wrap_text, get_mixed_width
 from .voice import VoiceSynthesizer
 from .audio_synth import synthesize_mood_track
+from .sfx import SoundEffectsSynthesizer
 
 class FilmCompiler:
     """Compiles multi-character animated short films and feature films."""
@@ -21,6 +22,16 @@ class FilmCompiler:
         self.shots_dir.mkdir(parents=True, exist_ok=True)
         self.sprites_dir = work_dir / "film_sprites"
         self.sprites_dir.mkdir(parents=True, exist_ok=True)
+        self.sfx_dir = work_dir / "film_sfx"
+        self.sfx_dir.mkdir(parents=True, exist_ok=True)
+
+        # Procedural Hollywood Sound Effects
+        self.impact_sfx = self.sfx_dir / "impact.wav"
+        self.whoosh_sfx = self.sfx_dir / "whoosh.wav"
+        self.telemetry_sfx = self.sfx_dir / "telemetry.wav"
+        SoundEffectsSynthesizer.generate_impact(self.impact_sfx, duration=2.5)
+        SoundEffectsSynthesizer.generate_whoosh(self.whoosh_sfx, duration=1.2)
+        SoundEffectsSynthesizer.generate_telemetry(self.telemetry_sfx, duration=3.0)
 
     def _prepare_character_sprites(self, char_name: str, prefix: str):
         """Prepares animated mouth-flapping sprite frames for a character."""
@@ -60,9 +71,10 @@ class FilmCompiler:
         audio_file: Path,
         duration: float,
         char1_info: Dict[str, Any],
-        char2_info: Dict[str, Any]
+        char2_info: Dict[str, Any],
+        emotion: str = "normal"
     ) -> Path:
-        """Renders an individual dialogue shot with talking character, listening character, and cinema subtitles."""
+        """Renders an individual dialogue shot with talking character, listening character, cinema subtitles, and Foley SFX."""
         out_shot = self.shots_dir / f"{scene.get('act_title', 'act')[:8]}_line_{line_idx:02d}.mp4"
 
         setting_name = scene.get("setting", "cyberpunk_city")
@@ -70,11 +82,6 @@ class FilmCompiler:
 
         # Determine who is speaking
         is_char1_speaking = (speaker.lower() == char1_info.get("name", "").lower())
-
-        # Left character (Char 1, facing right)
-        char1_type = char1_info.get("character_type", "presenter")
-        # Right character (Char 2, facing left)
-        char2_type = char2_info.get("character_type", "robot")
 
         if is_char1_speaking:
             # Char 2 is idle on the right
@@ -103,13 +110,13 @@ class FilmCompiler:
         speaker_tag = f"{speaker.upper()}: "
         fta_sub, fen_sub = get_fonts(26, bold=True)
 
-        sw = draw.textlength(speaker_tag, font=fen_sub)
+        sw = get_mixed_width(speaker_tag, fta_sub, fen_sub, draw)
         wrapped_line = wrap_text(f'"{text}"', fta_sub, fen_sub, 1700 - int(sw), draw)
 
         sy = 968
         for i, wl in enumerate(wrapped_line[:2]):
             if i == 0:
-                draw.text((80, sy), speaker_tag, fill=tag_color, font=fen_sub)
+                draw_mixed_line(draw, 80, sy, speaker_tag, tag_color, fta_sub, fen_sub)
                 draw_mixed_line(draw, 80 + int(sw), sy, wl, (255, 255, 255), fta_sub, fen_sub)
             else:
                 draw_mixed_line(draw, 80 + int(sw), sy, wl, (255, 255, 255), fta_sub, fen_sub)
@@ -129,33 +136,72 @@ class FilmCompiler:
             sprite_chain = f"[1:v]hflip[c_flip];[v_bg][c_flip]overlay={active_pos}[v_comp]"
 
         d_frames = int(duration * 24) + 48
-        fc = (
-            f"[0:v]zoompan=z='min(zoom+0.0007,1.10)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
-            f"{sprite_chain};"
-            f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=11:allf=t+u[vfinal]"
-        )
 
-        cmd = [
-            "ffmpeg", "-y",
-            "-loop", "1", "-framerate", "24", "-i", str(base_frame_path),
-            "-stream_loop", "-1", "-framerate", "8", "-i", str(self.sprites_dir / f"{active_prefix}_%02d.png"),
-            "-i", str(audio_file),
-            "-filter_complex", fc,
-            "-map", "[vfinal]",
-            "-map", "2:a",
-            "-af", "bass=g=3:f=110,equalizer=f=3200:t=q:w=1:g=2",
-            "-c:v", "libx264", "-preset", "veryfast",
-            "-c:a", "aac", "-b:a", "192k",
-            "-pix_fmt", "yuv420p",
-            "-t", f"{duration:.3f}",
-            str(out_shot)
-        ]
+        # Determine SFX layer
+        sfx_to_use = None
+        sfx_vol = 0.0
+        emo = emotion.lower()
+        if "dram" in emo or "cris" in emo or "urg" in emo or "rev" in emo:
+            sfx_to_use = self.impact_sfx
+            sfx_vol = 0.38
+        elif line_idx == 0:
+            sfx_to_use = self.whoosh_sfx
+            sfx_vol = 0.32
+        elif setting_name in ["quantum_lab", "digital_matrix"]:
+            sfx_to_use = self.telemetry_sfx
+            sfx_vol = 0.16
+
+        if sfx_to_use:
+            fc = (
+                f"[0:v]zoompan=z='min(zoom+0.0007,1.10)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
+                f"{sprite_chain};"
+                f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=11:allf=t+u[vfinal];"
+                f"[2:a]bass=g=3:f=110,equalizer=f=3200:t=q:w=1:g=2[a_speech];"
+                f"[3:a]volume={sfx_vol}[a_sfx];"
+                f"[a_speech][a_sfx]amix=inputs=2:duration=first:dropout_transition=2[afinal]"
+            )
+            cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1", "-framerate", "24", "-i", str(base_frame_path),
+                "-stream_loop", "-1", "-framerate", "8", "-i", str(self.sprites_dir / f"{active_prefix}_%02d.png"),
+                "-i", str(audio_file),
+                "-i", str(sfx_to_use),
+                "-filter_complex", fc,
+                "-map", "[vfinal]",
+                "-map", "[afinal]",
+                "-c:v", "libx264", "-preset", "veryfast",
+                "-c:a", "aac", "-b:a", "192k",
+                "-pix_fmt", "yuv420p",
+                "-t", f"{duration:.3f}",
+                str(out_shot)
+            ]
+        else:
+            fc = (
+                f"[0:v]zoompan=z='min(zoom+0.0007,1.10)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
+                f"{sprite_chain};"
+                f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=11:allf=t+u[vfinal]"
+            )
+            cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1", "-framerate", "24", "-i", str(base_frame_path),
+                "-stream_loop", "-1", "-framerate", "8", "-i", str(self.sprites_dir / f"{active_prefix}_%02d.png"),
+                "-i", str(audio_file),
+                "-filter_complex", fc,
+                "-map", "[vfinal]",
+                "-map", "2:a",
+                "-af", "bass=g=3:f=110,equalizer=f=3200:t=q:w=1:g=2",
+                "-c:v", "libx264", "-preset", "veryfast",
+                "-c:a", "aac", "-b:a", "192k",
+                "-pix_fmt", "yuv420p",
+                "-t", f"{duration:.3f}",
+                str(out_shot)
+            ]
 
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return out_shot
 
     def render_credits_sequence(self, film_title: str, credits: List[str], closing_quote: str, out_path: Path, duration: float = 8.0) -> Path:
-        """Renders cinematic end credits scroll."""
+        """Renders cinematic end credits scroll with mixed-font typography."""
         img = Image.new("RGBA", (1920, 1080), (6, 8, 14, 255))
         draw = ImageDraw.Draw(img)
 
@@ -170,25 +216,26 @@ class FilmCompiler:
         draw.rectangle([(0, 0), (1920, 138)], fill=(0, 0, 0, 255))
         draw.rectangle([(0, 942), (1920, 1080)], fill=(0, 0, 0, 255))
 
-        # Centered Film Title
+        # Centered Film Title (Bilingual support)
         fta_t, fen_t = get_fonts(48, bold=True)
-        tw = draw.textlength(film_title, font=fen_t)
-        draw.text(((1920 - tw) / 2, 220), film_title, fill=(0, 229, 255, 255), font=fen_t)
+        tw = get_mixed_width(film_title, fta_t, fen_t, draw)
+        draw_mixed_line(draw, int((1920 - tw) / 2), 220, film_title, (0, 229, 255, 255), fta_t, fen_t)
 
         # Closing philosophical quote
         if closing_quote:
             fta_q, fen_q = get_fonts(22, bold=False)
-            qw = draw.textlength(f'"{closing_quote}"', font=fen_q)
-            draw.text(((1920 - qw) / 2, 300), f'"{closing_quote}"', fill=(255, 215, 0, 230), font=fen_q)
+            quote_text = f'"{closing_quote}"'
+            qw = get_mixed_width(quote_text, fta_q, fen_q, draw)
+            draw_mixed_line(draw, int((1920 - qw) / 2), 300, quote_text, (255, 215, 0, 230), fta_q, fen_q)
 
         draw.line([(600, 360), (1320, 360)], fill=(0, 229, 255, 120), width=2)
 
-        # Credits Roll
+        # Credits Roll (Bilingual support)
         fta_c, fen_c = get_fonts(22, bold=True)
         cy = 410
         for line in credits[:6]:
-            lw = draw.textlength(line, font=fen_c)
-            draw.text(((1920 - lw) / 2, cy), line, fill=(210, 225, 245, 230), font=fen_c)
+            lw = get_mixed_width(line, fta_c, fen_c, draw)
+            draw_mixed_line(draw, int((1920 - lw) / 2), cy, line, (210, 225, 245, 230), fta_c, fen_c)
             cy += 48
 
         frame_file = self.work_dir / "credits_frame.png"
@@ -238,6 +285,7 @@ class FilmCompiler:
             for line_idx, d in enumerate(dialogue_lines):
                 speaker = d.get("speaker", "Character")
                 text = d.get("line", "")
+                emotion = d.get("emotion", "normal")
 
                 is_char1 = (speaker.lower() == char1_info.get("name", "").lower())
                 synth = synth_c1 if is_char1 else synth_c2
@@ -254,7 +302,8 @@ class FilmCompiler:
                     audio_file=line_audio,
                     duration=duration,
                     char1_info=char1_info,
-                    char2_info=char2_info
+                    char2_info=char2_info,
+                    emotion=emotion
                 )
                 shot_clips.append(shot_clip)
 
