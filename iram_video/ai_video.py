@@ -18,6 +18,8 @@ class AIVideoEngine:
     Tier 5: Documentary Motion Canvas (Ken Burns Dynamic Push/Pull/Pan)
     """
 
+    _veo_quota_exhausted: bool = False
+
     @classmethod
     def generate_with_google_veo(
         cls,
@@ -27,6 +29,9 @@ class AIVideoEngine:
         is_shorts: bool = False
     ) -> Optional[Path]:
         """Attempts video generation using Google Veo (veo-3.1-generate-preview / veo-2.0-generate-001)."""
+        if cls._veo_quota_exhausted:
+            return None
+
         api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         if not api_key:
             return None
@@ -36,7 +41,8 @@ class AIVideoEngine:
             from google.genai import types
 
             client = genai.Client()
-            dur_int = int(max(4, min(8, round(duration))))
+            # Google Veo accepts discrete durations: 4, 6, or 8 seconds
+            dur_int = 4 if duration <= 5.0 else (6 if duration <= 7.0 else 8)
             aspect_ratio = "9:16" if is_shorts else "16:9"
 
             models_to_try = [
@@ -81,11 +87,13 @@ class AIVideoEngine:
                 except Exception as sub_err:
                     err_msg = str(sub_err)
                     if "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg:
+                        cls._veo_quota_exhausted = True
                         print(f"   ⚠️ [Google Veo Notice] Quota limit reached (429 RESOURCE_EXHAUSTED)")
                         break
                     elif "404" in err_msg or "NOT_FOUND" in err_msg:
                         continue
                     else:
+                        cls._veo_quota_exhausted = True
                         print(f"   ⚠️ [Google Veo Notice] {err_msg[:90]}")
                         break
         except Exception as e:

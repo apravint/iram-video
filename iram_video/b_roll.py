@@ -72,6 +72,19 @@ class MediaFetcher:
                     return False
                 with open(out_path, "wb") as f:
                     f.write(content)
+
+            # Optimization: If downloaded image is gigantic (> 2560x1440), resize to 2560x1440
+            # to prevent ffmpeg zoompan from decompressing 300-megapixel images every frame.
+            if out_path.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
+                try:
+                    with Image.open(out_path) as img:
+                        if img.width > 2560 or img.height > 1440:
+                            img.thumbnail((2560, 1440), Image.Resampling.LANCZOS)
+                            rgb_img = img.convert("RGB")
+                            rgb_img.save(out_path, format="JPEG", quality=92)
+                except Exception:
+                    pass
+
             return True
         except Exception as e:
             print(f"[Notice] Media download error for {url}: {e}")
