@@ -12,6 +12,8 @@ from .renderer import SlideRenderer, is_tamil_text
 from .audio_synth import synthesize_mood_track
 from .compiler import VideoCompiler
 from .thumbnail import generate_thumbnail
+from .film_director import FilmDirector
+from .film_compiler import FilmCompiler
 
 def slugify(text: str) -> str:
     clean = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip().lower()
@@ -21,10 +23,12 @@ def slugify(text: str) -> str:
 def main():
     parser = argparse.ArgumentParser(
         prog="iram-video",
-        description="Universal Prompt-to-Video Engine (Cinema, Animated Characters, Shorts & Landscape, English & தமிழ்)."
+        description="Universal Film & Video Engine (Animation Feature Films, Cinema Trailers, Animated Characters, Shorts & Landscape, English & தமிழ்)."
     )
-    parser.add_argument("prompt", help="Topic, brief, or prompt for the video (English or தமிழ்)")
+    parser.add_argument("prompt", help="Topic, brief, or screenplay premise (English or தமிழ்)")
     parser.add_argument("-o", "--output", help="Output MP4 file path (default: ./<slug>.mp4)")
+    parser.add_argument("--film", "--feature", dest="film", action="store_true", help="Generate as full Multi-Character Animated Feature Film with dialogue, procedural sets, score & rolling end credits")
+    parser.add_argument("--cast", default=None, help="Cast preference (e.g. 'nova,unit-7' or 'ferris,gopher')")
     parser.add_argument("--shorts", action="store_true", help="Generate as vertical YouTube Shorts (9:16, 1080x1920, < 60s)")
     parser.add_argument("--cinema", "--movie", dest="cinema", action="store_true", help="Generate as Hollywood-grade cinema trailer (24 FPS, 2.39:1 letterbox, 35mm grain, color grade, Inception BRAAMs)")
     parser.add_argument("--character", default="none", choices=["none", "auto", "robot", "presenter", "ferris", "gopher"], help="Add animated character mascot ('robot', 'presenter', 'ferris', 'gopher', 'auto')")
@@ -46,8 +50,9 @@ def main():
     else:
         lang = "en"
 
+    is_film = args.film
     is_shorts = args.shorts
-    is_cinema = args.cinema
+    is_cinema = args.cinema or is_film
 
     # Character selection
     character = args.character
@@ -64,12 +69,14 @@ def main():
     elif character == "none":
         character = None
 
-    # Music default for cinema
+    # Music default for cinema / film
     music_mood = args.music
-    if is_cinema and music_mood == "cyber":
+    if (is_cinema or is_film) and music_mood == "cyber":
         music_mood = "trailer"
 
-    if is_cinema:
+    if is_film:
+        format_label = "Animated Feature Film (Multi-Character Dialogue & Procedural Sets)"
+    elif is_cinema:
         format_label = "Hollywood Cinema Trailer (24 FPS, 2.39:1 Scope)" if not is_shorts else "Vertical Cinematic Shorts (24 FPS, Scope Bars)"
     elif is_shorts:
         format_label = "YouTube Shorts (Vertical 9:16, 1080x1920)"
@@ -79,8 +86,10 @@ def main():
     slug = slugify(args.prompt)
     if is_shorts and not slug.endswith("_shorts"):
         slug += "_shorts"
-    if is_cinema and not slug.endswith("_cinema"):
+    if is_cinema and not slug.endswith("_cinema") and not is_film:
         slug += "_cinema"
+    if is_film and not slug.endswith("_film"):
+        slug += "_film"
 
     output_mp4 = Path(args.output).resolve() if args.output else Path(f"./{slug}.mp4").resolve()
     thumb_png = output_mp4.with_suffix(".png")
@@ -88,14 +97,82 @@ def main():
 
     lang_display = "தமிழ் (Tamil)" if lang == "ta" else "English"
     char_display = f" | Mascot: {character}" if character else ""
-    print(f"\n🎬 [IRAM VIDEO ENGINE] Initializing Video Generation Pipeline")
-    print(f"► Prompt: \"{args.prompt}\"")
+    print(f"\n🎬 [IRAM FILM STUDIO] Initializing Video Generation Pipeline")
+    print(f"► Premise: \"{args.prompt}\"")
     print(f"► Format: {format_label}{char_display}")
-    print(f"► Language: {lang_display} | Music Mood: {music_mood}")
-    print(f"► Output Target: {output_mp4}\n")
+    print(f"► Language: {lang_display} | Score: {music_mood}")
+    print(f"► Master Output: {output_mp4}\n")
 
     with tempfile.TemporaryDirectory(prefix="iram_video_") as tmpdir:
         work_dir = Path(tmpdir)
+
+        if is_film:
+            # --- ANIMATED FEATURE FILM PIPELINE ---
+            print(f"🧠 [1/4] Screenwriting & Directing Animated Feature Film...")
+            film_director = FilmDirector()
+            try:
+                screenplay = film_director.direct_film(
+                    args.prompt,
+                    scene_count=args.scenes or 3,
+                    language=lang,
+                    style_hint=args.style,
+                    cast_hint=args.cast
+                )
+            except Exception as e:
+                print(f"❌ Screenplay direction failed: {e}")
+                sys.exit(1)
+
+            film_title = screenplay.get("film_title", args.prompt[:60])
+            cast = screenplay.get("cast", [])
+            print(f"✓ Feature Screenplay Written: \"{film_title}\" ({len(screenplay.get('scenes', []))} Acts)")
+            print(f"🎭 Cast: {', '.join(c.get('name', 'Actor') + ' as ' + c.get('role', 'Role') for c in cast)}")
+
+            print(f"⚙️  [2/4] Recording multi-character dialogue & staging procedural sets...")
+            compiler = FilmCompiler(work_dir, language=lang)
+            print(f"🎥 [3/4] Compiling 24 FPS cinema shots with animated lip-sync & 35mm film grain...")
+            compiler.compile_film(screenplay, output_mp4)
+            print(f"🎉 MASTER FEATURE FILM GENERATED: {output_mp4}")
+
+            print(f"🖼️  [4/4] Designing theatrical film poster & metadata...")
+            if not args.no_thumbnail:
+                act_titles = [s.get("act_title", "") for s in screenplay.get("scenes", [])]
+                primary_char = cast[0].get("character_type", "presenter") if cast else "presenter"
+                generate_thumbnail(
+                    film_title,
+                    act_titles,
+                    {"bg": [8, 10, 20], "accent": [0, 229, 255], "secondary": [168, 85, 247]},
+                    thumb_png,
+                    is_cinema=True,
+                    character=primary_char
+                )
+                print(f"🖼️  THEATRICAL POSTER: {thumb_png}")
+
+            yt_meta = screenplay.get("youtube_metadata", {})
+            with open(meta_txt, "w") as f:
+                f.write(f"FILM TITLE:\n{film_title}\n\n")
+                f.write(f"GENRE:\n{screenplay.get('genre', 'Sci-Fi Animation')}\n\n")
+                f.write(f"SYNOPSIS:\n{yt_meta.get('description', '')}\n\n")
+                f.write("CAST & ROLES:\n")
+                for c in cast:
+                    f.write(f"• {c.get('name')}: {c.get('role')} (Rig: {c.get('character_type')})\n")
+                f.write("\nACTS & SCENES:\n")
+                for s in screenplay.get("scenes", []):
+                    f.write(f"• {s.get('act_title')} [{s.get('setting')}] — {s.get('time_and_place')}\n")
+                f.write(f"\nCLOSING QUOTE:\n\"{screenplay.get('closing_quote', '')}\"\n")
+                f.write(f"\nCREDITS:\n{chr(10).join(screenplay.get('credits', []))}\n")
+                f.write(f"\nTAGS:\n{', '.join(yt_meta.get('tags', []))}\n")
+            print(f"📋 FILM ARCHIVE & METADATA: {meta_txt}")
+
+            print("\n" + "=" * 60)
+            print(f"🎬 Feature Film Production Complete!")
+            print(f"• Movie Master: {output_mp4}")
+            if not args.no_thumbnail:
+                print(f"• Film Poster:  {thumb_png}")
+            print(f"• Screenplay:   {meta_txt}")
+            print("=" * 60 + "\n")
+            return
+
+        # --- STANDARD VIDEO & CINEMA TRAILER PIPELINE ---
         audio_dir = work_dir / "audio"
         slides_dir = work_dir / "slides"
         slides_dir.mkdir(parents=True, exist_ok=True)

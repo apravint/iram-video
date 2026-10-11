@@ -67,3 +67,16 @@ class VoiceSynthesizer:
 
     def synthesize(self, scenes: List[Dict[str, Any]], output_dir: Path) -> List[Dict[str, Any]]:
         return asyncio.run(self.generate_all(scenes, output_dir))
+
+    def synthesize_line(self, text: str, output_file: Path) -> float:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        cmd = [
+            "edge-tts",
+            "--voice", self.voice,
+            f"--rate={self.rate}",
+            "--text", text,
+            "--write-media", str(output_file)
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return self.get_duration(output_file)
+
