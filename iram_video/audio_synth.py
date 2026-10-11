@@ -18,6 +18,69 @@ def synthesize_mood_track(mood: str, duration_sec: float, output_path: Path):
 
     t = np.linspace(0, duration_sec, int(SAMPLE_RATE * duration_sec), endpoint=False)
     
+    if mood in ["cinematic", "trailer", "movie"]:
+        # Hans Zimmer Style Hollywood Trailer Score
+        # Staccato tension pulses (16th notes at 120 bpm)
+        pulse_step = 0.25
+        step_t = t % pulse_step
+        env_pulse = np.exp(-step_t * 14)
+        cellos = (
+            np.sin(2 * np.pi * 73.42 * t) +
+            0.5 * np.sin(2 * np.pi * 146.83 * t) +
+            0.25 * np.sin(2 * np.pi * 220.00 * t)
+        ) * env_pulse * 0.16
+
+        # Inception BRAAM Horn Impacts every 9 seconds
+        braam_track = np.zeros_like(t)
+        braam_interval = 9.0
+        num_braams = max(1, int(math.ceil(duration_sec / braam_interval)))
+        for b_idx in range(num_braams):
+            b_start = b_idx * braam_interval + 0.8
+            if b_start >= duration_sec:
+                break
+            b_mask = (t >= b_start) & (t < min(duration_sec, b_start + 4.5))
+            bt = t[b_mask] - b_start
+            b_env = np.exp(-bt * 0.75)
+            # Pitch drops from 58Hz down to 46Hz
+            b_pitch = 58.0 - (12.0 * (bt / 4.5))
+            raw_horn = (
+                np.sin(2 * np.pi * b_pitch * bt) +
+                0.85 * np.sin(2 * np.pi * b_pitch * 2 * bt) +
+                0.60 * np.sin(2 * np.pi * b_pitch * 3 * bt) +
+                0.45 * np.sin(2 * np.pi * b_pitch * 4 * bt) +
+                0.75 * np.sin(2 * np.pi * 38.0 * bt) # Sub-bass rumble
+            )
+            # Heavy saturated clipping for cinematic brass crunch
+            braam_track[b_mask] += np.tanh(raw_horn * 2.4) * b_env * 0.45
+
+        # Sub-bass 808 drops at start of scenes (every ~7 seconds)
+        sub_drops = np.zeros_like(t)
+        for s_idx in range(max(1, int(duration_sec // 7))):
+            s_start = s_idx * 7.0
+            s_mask = (t >= s_start) & (t < min(duration_sec, s_start + 2.0))
+            st = t[s_mask] - s_start
+            s_freq = 110.0 * np.exp(-st * 3.5) + 38.0
+            sub_drops[s_mask] += np.sin(2 * np.pi * s_freq * st) * np.exp(-st * 2.0) * 0.35
+
+        mix = cellos + braam_track + sub_drops
+        max_val = np.max(np.abs(mix))
+        if max_val > 0:
+            mix = (mix / max_val) * 0.52
+
+        # Master fade in/out
+        fade_len = int(SAMPLE_RATE * 2.0)
+        if len(mix) > fade_len * 2:
+            mix[:fade_len] *= np.linspace(0, 1, fade_len)
+            mix[-fade_len:] *= np.linspace(1, 0, fade_len)
+
+        audio_int16 = (mix * 32767).astype(np.int16)
+        with wave.open(str(output_path), "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SAMPLE_RATE)
+            wf.writeframes(audio_int16.tobytes())
+        return
+
     if mood == "lofi":
         # Warm Lofi progression (Am9 -> Dm9 -> G13 -> Cmaj7)
         chords = [

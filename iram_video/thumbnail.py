@@ -46,7 +46,7 @@ def draw_mixed_line(draw: ImageDraw.Draw, x: int, y: int, text: str, fill, font_
         cx += (bbox[2] - bbox[0])
     return cx
 
-def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], output_path: Path, is_shorts: bool = False):
+def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], output_path: Path, is_shorts: bool = False, is_cinema: bool = False, character: Optional[str] = None):
     w, h = (1080, 1920) if is_shorts else (1280, 720)
     
     bg_color = tuple(theme.get("bg", [10, 14, 24])) + (255,)
@@ -62,12 +62,14 @@ def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], ou
         b = int(accent_color[2] + (sec_color[2] - accent_color[2]) * (x / w))
         draw.line([(x, 0), (x, 8 if is_shorts else 6)], fill=(r, g, b, 255), width=8 if is_shorts else 6)
 
+    badge_text = "★ CINEMATIC TRAILER" if is_cinema else ("★ YOUTUBE SHORTS" if is_shorts else "★ FEATURED GUIDE")
+
     if is_shorts:
         # Vertical Shorts Thumbnail Layout (1080x1920)
         draw.rectangle((60, 360, w - 60, 1480), fill=(16, 24, 42), outline=accent_color, width=4)
-        draw.rectangle((100, 420, 500, 480), fill=(220, 38, 38))
+        draw.rectangle((100, 420, 520, 480), fill=(220, 38, 38))
         fta_cat, fen_cat = get_fonts(24)
-        draw_mixed_line(draw, 120, 435, "★ YOUTUBE SHORTS", (255, 255, 255), fta_cat, fen_cat)
+        draw_mixed_line(draw, 120, 435, badge_text, (255, 255, 255), fta_cat, fen_cat)
 
         clean_title = title.replace("#Shorts", "").replace("#shorts", "").strip()
         fta_title, fen_title = get_fonts(50)
@@ -118,6 +120,18 @@ def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], ou
         for b in (bullets[:5] or ["Core Architecture", "Step-by-Step", "Best Practices"]):
             draw_mixed_line(draw, 750, cy, f"⚡ {b[:36]}", (200, 225, 255), fta_check, fen_check)
             cy += 65
+
+    if character and character.lower() not in ["none", "false"]:
+        try:
+            from .characters import CharacterRenderer
+            if is_shorts:
+                char_img = CharacterRenderer.render_character(character, w=280, h=360, mouth_open=0.6, eye_state="happy", pointing=True)
+                img.paste(char_img, (w - 320, 1100), char_img)
+            else:
+                char_img = CharacterRenderer.render_character(character, w=260, h=340, mouth_open=0.6, eye_state="happy", pointing=True)
+                img.paste(char_img, (w - 300, 360), char_img)
+        except Exception:
+            pass
 
     draw.rectangle((0, 0, w - 1, h - 1), outline=accent_color, width=3)
     img.save(output_path)

@@ -59,7 +59,7 @@ class Director:
         else:
             self.client = genai.Client()
 
-    def direct(self, prompt: str, scene_count: int = None, style_hint: str = None, language: str = "en", is_shorts: bool = False) -> Dict[str, Any]:
+    def direct(self, prompt: str, scene_count: int = None, style_hint: str = None, language: str = "en", is_shorts: bool = False, is_cinema: bool = False, character: str = None) -> Dict[str, Any]:
         """Queries Google Gemini to outline and write the screenplay with multi-model fallback."""
         user_msg = f"User Prompt / Video Topic: {prompt}\n"
         
@@ -72,6 +72,21 @@ class Director:
             )
             if not scene_count:
                 scene_count = 3
+
+        if is_cinema:
+            user_msg += (
+                "CINEMATIC MOVIE TRAILER DIRECTIVE:\n"
+                "- Write this screenplay like an epic Hollywood blockbuster movie trailer or documentary cinema.\n"
+                "- Tone: Intense, high-stakes, dramatic, gripping, building to an epic climax.\n"
+                "- Narration: Deep movie trailer voiceover cadence (e.g., 'In a world governed by legacy systems...', dramatic pauses, cinematic one-liners).\n"
+                "- Scene Headings: Formatted as cinematic acts or dramatic turning points (e.g., 'ACT I: THE COLLAPSE', 'ACT II: THE FORGED TITANS', 'ACT III: THE NEW REIGN').\n"
+                "- Video Title: Blockbuster movie title (e.g. 'RUST VS GO: The War for Compute | Cinematic Trailer').\n"
+            )
+            if not scene_count:
+                scene_count = 3
+
+        if character:
+            user_msg += f"- Animated Presenter / Character: An on-screen animated mascot/character ('{character}') co-hosts the video.\n"
         
         if scene_count:
             user_msg += f"Target Scene Count: {scene_count} scenes.\n"
