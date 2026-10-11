@@ -11,25 +11,67 @@ FONT_TA_REG = "/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf"
 def is_tamil_text(text: str) -> bool:
     return any("\u0b80" <= c <= "\u0bff" for c in str(text))
 
-def get_font_for_text(text: str, size: int, bold: bool = False):
-    if is_tamil_text(text):
-        p = FONT_TA_BOLD if bold else FONT_TA_REG
-    else:
-        p = FONT_EN_BOLD if bold else FONT_EN_REG
-    try:
-        return ImageFont.truetype(p, size)
-    except Exception:
-        return ImageFont.load_default()
+def split_runs(text: str) -> List[Tuple[str, bool]]:
+    """Splits a string into sequential runs of Tamil vs Latin/Symbols."""
+    runs = []
+    if not text:
+        return runs
+    current_run = []
+    current_is_ta = None
+    for char in text:
+        is_ta = "\u0b80" <= char <= "\u0bff"
+        if current_is_ta is None:
+            current_is_ta = is_ta
+            current_run.append(char)
+        elif is_ta == current_is_ta:
+            current_run.append(char)
+        else:
+            runs.append(("".join(current_run), current_is_ta))
+            current_run = [char]
+            current_is_ta = is_ta
+    if current_run:
+        runs.append(("".join(current_run), current_is_ta))
+    return runs
 
-def wrap_text(text: str, font, max_width: int, draw: ImageDraw.Draw) -> List[str]:
+def get_fonts(size: int, bold: bool = False):
+    p_en = FONT_EN_BOLD if bold else FONT_EN_REG
+    p_ta = FONT_TA_BOLD if bold else FONT_TA_REG
+    try:
+        f_en = ImageFont.truetype(p_en, size)
+    except Exception:
+        f_en = ImageFont.load_default()
+    try:
+        f_ta = ImageFont.truetype(p_ta, size)
+    except Exception:
+        f_ta = f_en
+    return f_ta, f_en
+
+def get_mixed_width(text: str, font_ta, font_en, draw: ImageDraw.Draw) -> int:
+    w = 0
+    for chunk, is_ta in split_runs(text):
+        f = font_ta if is_ta else font_en
+        bbox = draw.textbbox((0, 0), chunk, font=f)
+        w += (bbox[2] - bbox[0])
+    return w
+
+def draw_mixed_line(draw: ImageDraw.Draw, x: int, y: int, text: str, fill, font_ta, font_en) -> int:
+    cx = x
+    for chunk, is_ta in split_runs(text):
+        f = font_ta if is_ta else font_en
+        draw.text((cx, y), chunk, fill=fill, font=f)
+        bbox = draw.textbbox((cx, y), chunk, font=f)
+        cx += (bbox[2] - bbox[0])
+    return cx
+
+def wrap_text(text: str, font_ta, font_en, max_width: int, draw: ImageDraw.Draw) -> List[str]:
     lines = []
     for paragraph in str(text).split("\n"):
         words = paragraph.split(" ")
         cur = []
         for word in words:
             test = " ".join(cur + [word])
-            bbox = draw.textbbox((0, 0), test, font=font)
-            if (bbox[2] - bbox[0]) <= max_width:
+            w = get_mixed_width(test, font_ta, font_en, draw)
+            if w <= max_width:
                 cur.append(word)
             else:
                 if cur:
@@ -74,15 +116,14 @@ class SlideRenderer:
             draw.line([(x, 0), (x, 6)], fill=(r, g, b, 255), width=6)
 
         if not self.is_shorts:
-            # Bottom status bar for landscape
             draw.line([(0, self.height - 45), (self.width, self.height - 45)], fill=(30, 44, 70, 255), width=1)
-            f_bot = get_font_for_text(video_title, 18, bold=False)
-            draw.text((60, self.height - 34), video_title[:80], fill=(120, 145, 180), font=f_bot)
-            draw.text((self.width - 240, self.height - 34), "IRAM AI Video", fill=self.accent_color, font=get_font_for_text("IRAM", 18, bold=True))
+            fta_bot, fen_bot = get_fonts(18, bold=False)
+            draw_mixed_line(draw, 60, self.height - 34, video_title[:80], (120, 145, 180), fta_bot, fen_bot)
+            draw_mixed_line(draw, self.width - 240, self.height - 34, "IRAM AI Video", self.accent_color, fta_bot, fen_bot)
         else:
-            # Shorts top category pill
-            draw.rectangle((60, 40, 280, 85), fill=(220, 38, 38))
-            draw.text((80, 50), "★ TECH SHORTS", fill=(255, 255, 255), font=get_font_for_text("SHORTS", 18, bold=True))
+            draw.rectangle((60, 40, 300, 85), fill=(220, 38, 38))
+            fta_cat, fen_cat = get_fonts(18, bold=True)
+            draw_mixed_line(draw, 80, 52, "★ TECH SHORTS", (255, 255, 255), fta_cat, fen_cat)
 
         return img, draw
 
@@ -94,11 +135,12 @@ class SlideRenderer:
         
         head_h = 56 if not subtitle else 76
         draw.line([(x1, y1 + head_h), (x2, y1 + head_h)], fill=bcol, width=1)
-        f_title = get_font_for_text(title, 22, bold=True)
-        draw.text((x1 + 20, y1 + 14), title[:50], fill=(255, 255, 255), font=f_title)
+        
+        fta_t, fen_t = get_fonts(22, bold=True)
+        draw_mixed_line(draw, x1 + 20, y1 + 14, title[:50], (255, 255, 255), fta_t, fen_t)
         if subtitle:
-            f_sub = get_font_for_text(subtitle, 15, bold=False)
-            draw.text((x1 + 20, y1 + 46), subtitle[:65], fill=(130, 160, 200), font=f_sub)
+            fta_sub, fen_sub = get_fonts(15, bold=False)
+            draw_mixed_line(draw, x1 + 20, y1 + 46, subtitle[:65], (130, 160, 200), fta_sub, fen_sub)
         return (x1 + 20, y1 + head_h + 16, x2 - 20, y2 - 16)
 
     def render_scene(self, scene: Dict[str, Any], video_title: str, out_path: Path):
@@ -108,14 +150,12 @@ class SlideRenderer:
         subheading = scene.get("subheading", "")
         
         if self.is_shorts:
-            # Vertical 9:16 Layout
             self._render_vertical_shorts(img, scene, heading, subheading)
         else:
-            # Landscape 16:9 Layout
-            f_head = get_font_for_text(heading, 44, bold=True)
-            f_subhead = get_font_for_text(subheading, 22, bold=False)
-            draw.text((100, 50), heading[:65], fill=(255, 255, 255), font=f_head)
-            draw.text((100, 105), subheading[:95], fill=self.accent_color, font=f_subhead)
+            fta_h, fen_h = get_fonts(44, bold=True)
+            fta_sub, fen_sub = get_fonts(22, bold=False)
+            draw_mixed_line(draw, 100, 50, heading[:65], (255, 255, 255), fta_h, fen_h)
+            draw_mixed_line(draw, 100, 105, subheading[:95], self.accent_color, fta_sub, fen_sub)
 
             l_type = scene.get("layout_type", "pillars")
             cards = scene.get("cards", [])
@@ -136,21 +176,18 @@ class SlideRenderer:
     # --- VERTICAL YOUTUBE SHORTS (9:16) LAYOUT ---
     def _render_vertical_shorts(self, img: Image.Image, scene: Dict[str, Any], heading: str, subheading: str):
         draw = ImageDraw.Draw(img)
-        f_head = get_font_for_text(heading, 42, bold=True)
-        f_sub = get_font_for_text(subheading, 22, bold=False)
+        fta_h, fen_h = get_fonts(42, bold=True)
+        fta_sub, fen_sub = get_fonts(22, bold=False)
 
-        # Header block (y=110 to 280)
-        draw.text((60, 110), heading[:48], fill=(255, 255, 255), font=f_head)
-        wrapped_sub = wrap_text(subheading, f_sub, 960, draw)
+        draw_mixed_line(draw, 60, 110, heading[:48], (255, 255, 255), fta_h, fen_h)
+        wrapped_sub = wrap_text(subheading, fta_sub, fen_sub, 960, draw)
         sy = 175
         for s in wrapped_sub[:2]:
-            draw.text((60, sy), s, fill=self.accent_color, font=f_sub)
+            draw_mixed_line(draw, 60, sy, s, self.accent_color, fta_sub, fen_sub)
             sy += 30
 
         cards = scene.get("cards", [])
         num_cards = max(1, min(3, len(cards)))
-        
-        # Stacked vertical cards inside safe zone (y=260 to 1640)
         total_avail_h = 1380
         gap = 30
         card_h = (total_avail_h - (num_cards - 1) * gap) // num_cards
@@ -166,16 +203,16 @@ class SlideRenderer:
             badge = card.get("badge")
             by = ib[1]
             if badge:
-                f_badge = get_font_for_text(badge, 16, bold=True)
+                fta_b, fen_b = get_fonts(16, bold=True)
                 cdraw.rectangle((ib[0], by, ib[0] + 160, by + 34), fill=(25, 38, 60), outline=col, width=1)
-                cdraw.text((ib[0] + 12, by + 6), badge, fill=col, font=f_badge)
+                draw_mixed_line(cdraw, ib[0] + 12, by + 6, badge, col, fta_b, fen_b)
                 by += 46
 
-            f_bullet = get_font_for_text(card.get("title", ""), 18, bold=False)
+            fta_bullet, fen_bullet = get_fonts(18, bold=False)
             for bullet in card.get("bullets", [])[:4]:
-                wrapped = wrap_text(bullet, f_bullet, card_w - 40, cdraw)
+                wrapped = wrap_text(bullet, fta_bullet, fen_bullet, card_w - 40, cdraw)
                 for w in wrapped:
-                    cdraw.text((ib[0], by), f"⚡ {w}", fill=(190, 215, 240), font=f_bullet)
+                    draw_mixed_line(cdraw, ib[0], by, f"⚡ {w}", (190, 215, 240), fta_bullet, fen_bullet)
                     by += 28
                 by += 10
 
@@ -195,16 +232,16 @@ class SlideRenderer:
             badge = card.get("badge")
             by = ib[1]
             if badge:
-                f_badge = get_font_for_text(badge, 15, bold=True)
+                fta_b, fen_b = get_fonts(15, bold=True)
                 cdraw.rectangle((ib[0], by, ib[0] + 160, by + 34), fill=(25, 38, 60), outline=col, width=1)
-                cdraw.text((ib[0] + 12, by + 6), badge, fill=col, font=f_badge)
+                draw_mixed_line(cdraw, ib[0] + 12, by + 6, badge, col, fta_b, fen_b)
                 by += 50
                 
+            fta_bullet, fen_bullet = get_fonts(17, bold=False)
             for bullet in card.get("bullets", []):
-                f_bullet = get_font_for_text(bullet, 17, bold=False)
-                wrapped = wrap_text(bullet, f_bullet, card_w - 40, cdraw)
+                wrapped = wrap_text(bullet, fta_bullet, fen_bullet, card_w - 40, cdraw)
                 for w in wrapped:
-                    cdraw.text((ib[0], by), f"• {w}", fill=(190, 215, 240), font=f_bullet)
+                    draw_mixed_line(cdraw, ib[0], by, f"• {w}", (190, 215, 240), fta_bullet, fen_bullet)
                     by += 25
                 by += 12
 
@@ -220,12 +257,12 @@ class SlideRenderer:
             ib = self.draw_card_frame(img, (x, card_y, x + col_w, card_y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
             cdraw = ImageDraw.Draw(img)
             by = ib[1]
+            fta_b, fen_b = get_fonts(18, bold=False)
             for bullet in card.get("bullets", []):
-                f_b = get_font_for_text(bullet, 18, bold=False)
-                cdraw.text((ib[0], by), "✓", fill=col, font=get_font_for_text("✓", 20, bold=True))
-                wrapped = wrap_text(bullet, f_b, col_w - 50, cdraw)
+                draw_mixed_line(cdraw, ib[0], by, "✓", col, fta_b, fen_b)
+                wrapped = wrap_text(bullet, fta_b, fen_b, col_w - 50, cdraw)
                 for w in wrapped:
-                    cdraw.text((ib[0] + 28, by), w, fill=(195, 215, 240), font=f_b)
+                    draw_mixed_line(cdraw, ib[0] + 28, by, w, (195, 215, 240), fta_b, fen_b)
                     by += 26
                 by += 16
 
@@ -233,32 +270,32 @@ class SlideRenderer:
         ib = self.draw_card_frame(img, (100, 180, self.width - 100, 900), "Terminal / Code Simulation", heading, border_color=(0, 255, 136, 200))
         tdraw = ImageDraw.Draw(img)
         ty = ib[1] + 10
+        fta_t, fen_t = get_fonts(20, bold=True)
+        fta_term, fen_term = get_fonts(18, bold=False)
         
         for card in cards:
             title = card.get("title", "")
             if title:
-                f_t = get_font_for_text(title, 20, bold=True)
-                tdraw.text((ib[0] + 10, ty), f"$ {title}", fill=(0, 255, 136), font=f_t)
+                draw_mixed_line(tdraw, ib[0] + 10, ty, f"$ {title}", (0, 255, 136), fta_t, fen_t)
                 ty += 34
             for b in card.get("bullets", []):
-                f_term = get_font_for_text(b, 18, bold=False)
-                tdraw.text((ib[0] + 25, ty), f"> {b}", fill=(200, 225, 255), font=f_term)
+                draw_mixed_line(tdraw, ib[0] + 25, ty, f"> {b}", (200, 225, 255), fta_term, fen_term)
                 ty += 28
             ty += 16
 
     def _render_stack_list(self, img: Image.Image, cards: List[Dict[str, Any]]):
         y = 180
         card_h = 155
+        fta_desc, fen_desc = get_fonts(18, bold=False)
         for i, card in enumerate(cards[:4]):
             col = self.accent_color if i % 2 == 0 else self.sec_color
             ib = self.draw_card_frame(img, (100, y, self.width - 100, y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
             sdraw = ImageDraw.Draw(img)
             bullets_text = "  |  ".join(card.get("bullets", []))
-            f_desc = get_font_for_text(bullets_text, 18, bold=False)
-            wrapped = wrap_text(bullets_text, f_desc, self.width - 260, sdraw)
+            wrapped = wrap_text(bullets_text, fta_desc, fen_desc, self.width - 260, sdraw)
             dy = ib[1] + 6
             for w in wrapped:
-                sdraw.text((ib[0], dy), w, fill=(195, 215, 240), font=f_desc)
+                draw_mixed_line(sdraw, ib[0], dy, w, (195, 215, 240), fta_desc, fen_desc)
                 dy += 26
             y += 175
 
@@ -266,14 +303,14 @@ class SlideRenderer:
         card1 = cards[0] if cards else {}
         ib1 = self.draw_card_frame(img, (100, 180, 720, 880), card1.get("title", "HIGHLIGHT"), "", border_color=self.accent_color)
         c1_draw = ImageDraw.Draw(img)
-        f_hero = get_font_for_text(card1.get("badge", "★ 100%"), 60, bold=True)
-        c1_draw.text((ib1[0] + 20, ib1[1] + 40), card1.get("badge", "★ 100%"), fill=self.accent_color, font=f_hero)
+        fta_hero, fen_hero = get_fonts(60, bold=True)
+        draw_mixed_line(c1_draw, ib1[0] + 20, ib1[1] + 40, card1.get("badge", "★ 100%"), self.accent_color, fta_hero, fen_hero)
         hy = ib1[1] + 160
+        fta_b, fen_b = get_fonts(18, bold=False)
         for b in card1.get("bullets", []):
-            f_b = get_font_for_text(b, 18, bold=False)
-            wrapped = wrap_text(b, f_b, 540, c1_draw)
+            wrapped = wrap_text(b, fta_b, fen_b, 540, c1_draw)
             for w in wrapped:
-                c1_draw.text((ib1[0] + 20, hy), f"• {w}", fill=(190, 215, 240), font=f_b)
+                draw_mixed_line(c1_draw, ib1[0] + 20, hy, f"• {w}", (190, 215, 240), fta_b, fen_b)
                 hy += 26
             hy += 14
 
@@ -282,9 +319,8 @@ class SlideRenderer:
         c2_draw = ImageDraw.Draw(img)
         ry = ib2[1]
         for b in card2.get("bullets", []):
-            f_b = get_font_for_text(b, 18, bold=False)
-            wrapped = wrap_text(b, f_b, 980, c2_draw)
+            wrapped = wrap_text(b, fta_b, fen_b, 980, c2_draw)
             for w in wrapped:
-                c2_draw.text((ib2[0] + 20, ry), f"✓ {w}", fill=(190, 215, 240), font=f_b)
+                draw_mixed_line(c2_draw, ib2[0] + 20, ry, f"✓ {w}", (190, 215, 240), fta_b, fen_b)
                 ry += 26
             ry += 16

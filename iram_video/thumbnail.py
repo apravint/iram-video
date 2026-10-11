@@ -1,19 +1,50 @@
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
 FONT_EN_BOLD = "/home/apravint/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFontPropo-Bold.ttf"
 FONT_TA_BOLD = "/usr/share/fonts/truetype/noto/NotoSansTamil-Bold.ttf"
 
-def is_tamil_text(text: str) -> bool:
-    return any("\u0b80" <= c <= "\u0bff" for c in str(text))
+def split_runs(text: str) -> List[Tuple[str, bool]]:
+    runs = []
+    if not text:
+        return runs
+    current_run = []
+    current_is_ta = None
+    for char in text:
+        is_ta = "\u0b80" <= char <= "\u0bff"
+        if current_is_ta is None:
+            current_is_ta = is_ta
+            current_run.append(char)
+        elif is_ta == current_is_ta:
+            current_run.append(char)
+        else:
+            runs.append(("".join(current_run), current_is_ta))
+            current_run = [char]
+            current_is_ta = is_ta
+    if current_run:
+        runs.append(("".join(current_run), current_is_ta))
+    return runs
 
-def get_font_for_text(text: str, size: int):
-    p = FONT_TA_BOLD if is_tamil_text(text) else FONT_EN_BOLD
+def get_fonts(size: int):
     try:
-        return ImageFont.truetype(p, size)
+        f_en = ImageFont.truetype(FONT_EN_BOLD, size)
     except Exception:
-        return ImageFont.load_default()
+        f_en = ImageFont.load_default()
+    try:
+        f_ta = ImageFont.truetype(FONT_TA_BOLD, size)
+    except Exception:
+        f_ta = f_en
+    return f_ta, f_en
+
+def draw_mixed_line(draw: ImageDraw.Draw, x: int, y: int, text: str, fill, font_ta, font_en) -> int:
+    cx = x
+    for chunk, is_ta in split_runs(text):
+        f = font_ta if is_ta else font_en
+        draw.text((cx, y), chunk, fill=fill, font=f)
+        bbox = draw.textbbox((cx, y), chunk, font=f)
+        cx += (bbox[2] - bbox[0])
+    return cx
 
 def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], output_path: Path, is_shorts: bool = False):
     w, h = (1080, 1920) if is_shorts else (1280, 720)
@@ -33,62 +64,58 @@ def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], ou
 
     if is_shorts:
         # Vertical Shorts Thumbnail Layout (1080x1920)
-        # Center box (y=400 to 1450)
         draw.rectangle((60, 360, w - 60, 1480), fill=(16, 24, 42), outline=accent_color, width=4)
-        
-        # Category Pill
-        draw.rectangle((100, 420, 480, 480), fill=(220, 38, 38))
-        f_cat = get_font_for_text("★ YOUTUBE SHORTS", 24)
-        draw.text((120, 435), "★ YOUTUBE SHORTS", fill=(255, 255, 255), font=f_cat)
+        draw.rectangle((100, 420, 500, 480), fill=(220, 38, 38))
+        fta_cat, fen_cat = get_fonts(24)
+        draw_mixed_line(draw, 120, 435, "★ YOUTUBE SHORTS", (255, 255, 255), fta_cat, fen_cat)
 
         words = title.split(" ")
         mid = max(1, len(words) // 2)
         line1 = " ".join(words[:mid])
         line2 = " ".join(words[mid:])
 
-        f_l1 = get_font_for_text(line1, 56)
-        f_l2 = get_font_for_text(line2, 58)
-        draw.text((100, 530), line1[:28], fill=(255, 255, 255), font=f_l1)
-        draw.text((100, 620), line2[:30], fill=accent_color, font=f_l2)
+        fta_l1, fen_l1 = get_fonts(54)
+        fta_l2, fen_l2 = get_fonts(56)
+        draw_mixed_line(draw, 100, 530, line1[:28], (255, 255, 255), fta_l1, fen_l1)
+        draw_mixed_line(draw, 100, 620, line2[:30], accent_color, fta_l2, fen_l2)
 
         draw.rectangle((100, 750, w - 100, 830), fill=(24, 36, 60), outline=sec_color, width=2)
-        f_callout = get_font_for_text("60 SECONDS EXPLAINER", 26)
-        draw.text((120, 772), "60 SECONDS EXPLAINER", fill=(255, 215, 0), font=f_callout)
+        fta_call, fen_call = get_fonts(26)
+        draw_mixed_line(draw, 120, 772, "60 SECONDS EXPLAINER", (255, 215, 0), fta_call, fen_call)
 
-        # Bullets
         cy = 900
+        fta_check, fen_check = get_fonts(24)
         for b in (bullets[:4] or ["Core Concept", "Key Takeaways", "Real Example"]):
-            f_check = get_font_for_text(b, 24)
-            draw.text((100, cy), f"⚡ {b[:32]}", fill=(200, 225, 255), font=f_check)
+            draw_mixed_line(draw, 100, cy, f"⚡ {b[:32]}", (200, 225, 255), fta_check, fen_check)
             cy += 85
     else:
         # Landscape 16:9 Thumbnail Layout (1280x720)
         draw.rectangle((60, 80, 680, 640), fill=(16, 24, 42), outline=accent_color, width=3)
         draw.rectangle((90, 120, 390, 170), fill=(220, 38, 38))
-        f_cat = get_font_for_text("★ FEATURED GUIDE", 22)
-        draw.text((110, 132), "★ FEATURED GUIDE", fill=(255, 255, 255), font=f_cat)
+        fta_cat, fen_cat = get_fonts(22)
+        draw_mixed_line(draw, 110, 132, "★ FEATURED GUIDE", (255, 255, 255), fta_cat, fen_cat)
 
         words = title.split(" ")
         mid = max(1, len(words) // 2)
         line1 = " ".join(words[:mid])
         line2 = " ".join(words[mid:])
 
-        f_line1 = get_font_for_text(line1, 46)
-        f_line2 = get_font_for_text(line2, 48)
-        draw.text((90, 210), line1[:30], fill=(255, 255, 255), font=f_line1)
-        draw.text((90, 280), line2[:32], fill=accent_color, font=f_line2)
+        fta_line1, fen_line1 = get_fonts(46)
+        fta_line2, fen_line2 = get_fonts(48)
+        draw_mixed_line(draw, 90, 210, line1[:30], (255, 255, 255), fta_line1, fen_line1)
+        draw_mixed_line(draw, 90, 280, line2[:32], accent_color, fta_line2, fen_line2)
 
         draw.rectangle((90, 380, 650, 440), fill=(24, 36, 60), outline=sec_color, width=2)
-        f_subpill = get_font_for_text("COMPLETE WALKTHROUGH", 22)
-        draw.text((110, 398), "COMPLETE WALKTHROUGH", fill=(255, 215, 0), font=f_subpill)
+        fta_subpill, fen_subpill = get_fonts(22)
+        draw_mixed_line(draw, 110, 398, "COMPLETE WALKTHROUGH", (255, 215, 0), fta_subpill, fen_subpill)
 
         draw.rectangle((720, 80, 1220, 640), fill=(14, 20, 35), outline=sec_color, width=2)
-        draw.text((750, 120), "WHAT YOU LEARN:", fill=(255, 255, 255), font=get_font_for_text("WHAT", 26))
+        draw.text((750, 120), "WHAT YOU LEARN:", fill=(255, 255, 255), font=fen_cat)
 
         cy = 190
-        for b in (bullets[:5] or ["Core Architecture Explained", "Step-by-Step Implementation", "Production Best Practices", "Live Demo & Source Code"]):
-            f_check = get_font_for_text(b, 19)
-            draw.text((750, cy), f"⚡ {b[:36]}", fill=(200, 225, 255), font=f_check)
+        fta_check, fen_check = get_fonts(19)
+        for b in (bullets[:5] or ["Core Architecture", "Step-by-Step", "Best Practices"]):
+            draw_mixed_line(draw, 750, cy, f"⚡ {b[:36]}", (200, 225, 255), fta_check, fen_check)
             cy += 65
 
     draw.rectangle((0, 0, w - 1, h - 1), outline=accent_color, width=3)
