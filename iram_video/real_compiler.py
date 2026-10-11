@@ -5,13 +5,15 @@ from typing import List, Dict, Any, Optional
 
 from .b_roll import MediaFetcher
 from .audio_synth import synthesize_mood_track
+from .ai_video import AIVideoEngine
 
 class RealVideoCompiler:
-    """Compiles realistic documentary-style YouTube videos with real B-roll footage and photography (no cyberpunk, no subtitles)."""
+    """Compiles realistic documentary-style YouTube videos with AI video models (Veo/Wan/Kling) or real B-roll footage and photography (no cyberpunk, no subtitles)."""
 
-    def __init__(self, work_dir: Path, is_shorts: bool = False):
+    def __init__(self, work_dir: Path, is_shorts: bool = False, provider: str = "auto"):
         self.work_dir = work_dir
         self.is_shorts = is_shorts
+        self.provider = provider
         self.broll_dir = work_dir / "broll_media"
         self.broll_dir.mkdir(parents=True, exist_ok=True)
         self.shots_dir = work_dir / "real_shots"
@@ -20,7 +22,10 @@ class RealVideoCompiler:
         self.h = 1920 if is_shorts else 1080
 
     def _render_single_shot(self, query: str, duration: float, audio_file: Path, out_shot: Path, scene_idx: int) -> Path:
-        media_path = MediaFetcher.fetch_scene_broll(query, self.broll_dir, scene_idx)
+        beat = {"query": query, "duration": duration}
+        media_path = AIVideoEngine.fetch_or_generate_beat_media(
+            beat, self.broll_dir, f"scene_{scene_idx:02d}", is_shorts=self.is_shorts, provider=self.provider
+        )
         is_video = media_path.suffix.lower() in [".mp4", ".webm", ".mkv", ".mov"]
 
         if is_video:
@@ -83,10 +88,10 @@ class RealVideoCompiler:
         beat_clips = []
         for b_idx, beat in enumerate(beats):
             b_dur = float(beat["duration"])
-            b_query = beat["query"]
             beat_clip_path = self.shots_dir / f"beat_{scene_idx:02d}_{b_idx:02d}.mp4"
-
-            media_path = MediaFetcher.fetch_media_for_beat(b_query, self.broll_dir, f"{scene_idx:02d}_{b_idx:02d}")
+            media_path = AIVideoEngine.fetch_or_generate_beat_media(
+                beat, self.broll_dir, f"{scene_idx:02d}_{b_idx:02d}", is_shorts=self.is_shorts, provider=self.provider
+            )
             is_video = media_path.suffix.lower() in [".webm", ".mp4", ".mkv", ".mov"]
 
             if is_video:

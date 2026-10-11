@@ -76,8 +76,10 @@ def main():
     parser.add_argument("--voice", default="default", help="Voice persona ('aria', 'christopher', 'jenny', 'pallavi' [Tamil female], 'valluvar' [Tamil male], etc.)")
     parser.add_argument("--scenes", type=int, default=None, help="Desired scene count (default: auto)")
     parser.add_argument("--music", default="auto", choices=["auto", "documentary", "acoustic", "lofi", "tech", "ambient", "trailer", "cinematic", "cyber", "none"], help="Background music mood (default: documentary for real/youtube, cyber for tech, trailer for cinema)")
-    parser.add_argument("--no-thumbnail", action="store_true", help="Skip thumbnail generation")
     parser.add_argument("--style", default=None, help="Style hint for the director (e.g. 'documentary', 'realistic', 'vox style', 'educational')")
+    parser.add_argument("--generator", default="auto", choices=["auto", "veo", "fal", "wan", "replicate", "kling", "stock"], help="Video generator backend with cascading fallback: 'auto' (Veo -> Fal -> Replicate -> Stock), 'veo', 'wan', 'stock'")
+    parser.add_argument("--veo", dest="generator_veo", action="store_true", help="Prioritize Google Veo 3.1 / 2.0 generative video synthesis")
+    parser.add_argument("--ai-video", dest="ai_video", action="store_true", help="Enable AI generative video synthesis with automatic multi-tier fallback")
 
     args = parser.parse_args()
 
@@ -115,6 +117,14 @@ def main():
     is_shorts = args.shorts
     is_cinema = args.cinema or is_film
     is_real = args.real
+
+    generator_prov = args.generator
+    if args.generator_veo:
+        generator_prov = "veo"
+        is_real = True
+    elif args.ai_video:
+        generator_prov = "auto"
+        is_real = True
 
     p_low = args.prompt.lower()
     if not is_film and not is_cinema and (args.real or any(k in p_low for k in ["real", "documentary", "history", "nature", "science", "explain", "how to", "why"])):
@@ -303,9 +313,8 @@ def main():
 
         # 4 & 5. Video Sourcing & Compilation
         if is_real:
-            # --- REAL YOUTUBE DOCUMENTARY PIPELINE (REAL B-ROLL, NO SLIDES, NO CYBERPUNK, NO SUBTITLES) ---
-            print(f"🎥 [4/5] Sourcing real HD stock B-roll footage and 4K photography from public archives...")
-            real_compiler = RealVideoCompiler(work_dir, is_shorts=is_shorts)
+            print(f"🎥 [4/5] Sourcing video footage ({generator_prov.upper()} generative AI + stock fallback)...")
+            real_compiler = RealVideoCompiler(work_dir, is_shorts=is_shorts, provider=generator_prov)
             print(f"⚙️  [5/5] Compiling master documentary video with acoustic score (NO subtitles)...")
             real_compiler.compile_real_video(scenes, bg_music_wav, output_mp4)
             print(f"🎉 MASTER REAL VIDEO GENERATED: {output_mp4}")

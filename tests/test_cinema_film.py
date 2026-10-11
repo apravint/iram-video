@@ -89,5 +89,30 @@ class TestCinemaFilmEngine(unittest.TestCase):
         total_dur = sum(b["duration"] for b in beats)
         self.assertAlmostEqual(total_dur, 12.0, delta=0.1)
 
+    def test_ai_video_engine_fallback_chain(self):
+        from iram_video.ai_video import AIVideoEngine
+        out_dir = Path("/tmp/test_ai_video_fallback")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        sample_beat = {
+            "query": "solar flare space",
+            "phrase": "A colossal solar flare erupts from the sun.",
+            "duration": 4.5,
+            "ai_prompt": "Cinematic 8k shot of a solar flare erupting into dark space"
+        }
+        # With veo requested, if quota limit hit or unbilled, it MUST gracefully fallback and return a valid file
+        result_file = AIVideoEngine.fetch_or_generate_beat_media(
+            sample_beat, out_dir, "test_01", is_shorts=False, provider="veo"
+        )
+        self.assertTrue(result_file.exists())
+        self.assertTrue(result_file.stat().st_size > 1000)
+
+    def test_ai_video_engine_env_guards(self):
+        from iram_video.ai_video import AIVideoEngine
+        # When FAL_KEY or REPLICATE_API_TOKEN is absent, calls must safely return None
+        fal_res = AIVideoEngine.generate_with_fal("test prompt", Path("/tmp/fal_test.mp4"))
+        rep_res = AIVideoEngine.generate_with_replicate("test prompt", Path("/tmp/rep_test.mp4"))
+        self.assertIsNone(fal_res)
+        self.assertIsNone(rep_res)
+
 if __name__ == "__main__":
     unittest.main()
