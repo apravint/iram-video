@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from PIL import Image, ImageDraw, ImageFont
 
 from .renderer import get_fonts, draw_mixed_line, split_runs, get_mixed_width

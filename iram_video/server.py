@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import mimetypes
 import threading
@@ -310,7 +311,7 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
             lang = payload.get("language", "en")
 
             # Build command line
-            cmd = ["iram-video"]
+            cmd = [sys.executable, "-m", "iram_video.cli"]
             if json_doc and Path(json_doc).exists():
                 cmd.extend(["--from-json", str(json_doc)])
             else:

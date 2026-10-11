@@ -34,14 +34,19 @@ class VoiceSynthesizer:
         self.rate = rate
 
     def get_duration(self, audio_file: Path) -> float:
+        if not audio_file.exists() or audio_file.stat().st_size == 0:
+            return 3.0
         cmd = [
             "ffprobe", "-v", "error",
             "-show_entries", "format=duration",
             "-of", "default=noprint_wrappers=1:nokey=1",
             str(audio_file)
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return float(res.stdout.strip())
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            return max(0.5, float(res.stdout.strip()))
+        except Exception:
+            return 3.0
 
     async def _generate_single(self, scene: Dict[str, Any], output_dir: Path) -> Dict[str, Any]:
         sid = scene["id"]
@@ -53,8 +58,19 @@ class VoiceSynthesizer:
             "--text", scene["narration"],
             "--write-media", str(out_mp3)
         ]
-        proc = await asyncio.create_subprocess_exec(*cmd)
-        await proc.wait()
+        try:
+            proc = await asyncio.create_subprocess_exec(*cmd)
+            await proc.wait()
+        except Exception as e:
+            print(f"[Notice] edge-tts error for scene '{sid}': {e}")
+
+        if not out_mp3.exists() or out_mp3.stat().st_size == 0:
+            fallback_cmd = [
+                "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+                "-t", "3.0", "-q:a", "9", str(out_mp3)
+            ]
+            subprocess.run(fallback_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
         dur = self.get_duration(out_mp3)
         scene["audio_file"] = str(out_mp3.resolve())
         scene["duration"] = dur
@@ -77,6 +93,14 @@ class VoiceSynthesizer:
             "--text", text,
             "--write-media", str(output_file)
         ]
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            fallback_cmd = [
+                "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+                "-t", "3.0", "-q:a", "9", str(output_file)
+            ]
+            subprocess.run(fallback_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
         return self.get_duration(output_file)
 

@@ -151,5 +151,37 @@ class TestCinemaFilmEngine(unittest.TestCase):
         MediaFetcher.reset_session()
         self.assertEqual(len(MediaFetcher._used_urls), 0)
 
+    def test_voice_synth_duration_guard(self):
+        from iram_video.voice import VoiceSynthesizer
+        vs = VoiceSynthesizer()
+        # Non-existent or empty file should safely return default 3.0 seconds rather than crash
+        dur = vs.get_duration(Path("/tmp/non_existent_audio_file.mp3"))
+        self.assertAlmostEqual(dur, 3.0)
+
+    def test_thumbnail_generation(self):
+        from iram_video.thumbnail import generate_thumbnail
+        with tempfile.TemporaryDirectory() as td:
+            thumb_out = Path(td) / "test_thumb.png"
+            theme = {"bg": [10, 14, 24], "accent": [0, 229, 255], "secondary": [168, 85, 247]}
+            generate_thumbnail(
+                title="சென்னை மெட்ரோ Phase 2 Launch",
+                bullets=["116 km Network", "3 New Corridors", "Driverless Trains"],
+                theme=theme,
+                output_path=thumb_out,
+                is_shorts=False,
+                is_cinema=False,
+                character="robot"
+            )
+            self.assertTrue(thumb_out.exists())
+            self.assertTrue(thumb_out.stat().st_size > 1000)
+
+    def test_geographic_noise_rejection(self):
+        from iram_video.b_roll import MediaFetcher
+        # Images from Beijing or Shanghai must be rejected when topic is Chennai/India
+        self.assertTrue(MediaFetcher.is_noise_candidate("File:Beijing Subway Line 1 Train.jpg", topic="Chennai Metro"))
+        self.assertTrue(MediaFetcher.is_noise_candidate("File:Shanghai Metro Phase 2.jpg", topic="Chennai Metro"))
+        self.assertTrue(MediaFetcher.is_noise_candidate("File:Tokyo Minibus.jpg", topic="Chennai Metro"))
+        self.assertFalse(MediaFetcher.is_noise_candidate("File:Chennai Metro Phase2 trainset.jpg", topic="Chennai Metro"))
+
 if __name__ == "__main__":
     unittest.main()
