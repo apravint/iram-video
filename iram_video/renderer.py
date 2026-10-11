@@ -8,8 +8,6 @@ FONT_EN_REG = "/home/apravint/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerd
 FONT_TA_BOLD = "/usr/share/fonts/truetype/noto/NotoSansTamil-Bold.ttf"
 FONT_TA_REG = "/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf"
 
-WIDTH, HEIGHT = 1920, 1080
-
 def is_tamil_text(text: str) -> bool:
     return any("\u0b80" <= c <= "\u0bff" for c in str(text))
 
@@ -45,7 +43,11 @@ def wrap_text(text: str, font, max_width: int, draw: ImageDraw.Draw) -> List[str
     return lines
 
 class SlideRenderer:
-    def __init__(self, theme: Dict[str, Any] = None):
+    def __init__(self, theme: Dict[str, Any] = None, is_shorts: bool = False):
+        self.is_shorts = is_shorts
+        self.width = 1080 if is_shorts else 1920
+        self.height = 1920 if is_shorts else 1080
+
         theme = theme or {}
         self.bg_color = tuple(theme.get("bg", [10, 14, 24])) + (255,)
         self.accent_color = tuple(theme.get("accent", [0, 229, 255])) + (255,)
@@ -53,28 +55,35 @@ class SlideRenderer:
         self.card_bg = tuple(theme.get("card_bg", [16, 24, 42])) + (235,)
 
     def create_canvas(self, video_title: str) -> Tuple[Image.Image, ImageDraw.Draw]:
-        img = Image.new("RGBA", (WIDTH, HEIGHT), self.bg_color)
+        img = Image.new("RGBA", (self.width, self.height), self.bg_color)
         draw = ImageDraw.Draw(img)
         
         # Grid lines
         grid_col = (25, 36, 56, 90)
-        for x in range(0, WIDTH, 80):
-            draw.line([(x, 0), (x, HEIGHT)], fill=grid_col, width=1)
-        for y in range(0, HEIGHT, 80):
-            draw.line([(0, y), (WIDTH, y)], fill=grid_col, width=1)
+        grid_step = 60 if self.is_shorts else 80
+        for x in range(0, self.width, grid_step):
+            draw.line([(x, 0), (x, self.height)], fill=grid_col, width=1)
+        for y in range(0, self.height, grid_step):
+            draw.line([(0, y), (self.width, y)], fill=grid_col, width=1)
 
         # Top gradient border
-        for x in range(WIDTH):
-            r = int(self.accent_color[0] + (self.sec_color[0] - self.accent_color[0]) * (x / WIDTH))
-            g = int(self.accent_color[1] + (self.sec_color[1] - self.accent_color[1]) * (x / WIDTH))
-            b = int(self.accent_color[2] + (self.sec_color[2] - self.accent_color[2]) * (x / WIDTH))
-            draw.line([(x, 0), (x, 5)], fill=(r, g, b, 255), width=5)
+        for x in range(self.width):
+            r = int(self.accent_color[0] + (self.sec_color[0] - self.accent_color[0]) * (x / self.width))
+            g = int(self.accent_color[1] + (self.sec_color[1] - self.accent_color[1]) * (x / self.width))
+            b = int(self.accent_color[2] + (self.sec_color[2] - self.accent_color[2]) * (x / self.width))
+            draw.line([(x, 0), (x, 6)], fill=(r, g, b, 255), width=6)
 
-        # Bottom status bar
-        draw.line([(0, HEIGHT - 45), (WIDTH, HEIGHT - 45)], fill=(30, 44, 70, 255), width=1)
-        f_bot = get_font_for_text(video_title, 18, bold=False)
-        draw.text((60, HEIGHT - 34), video_title[:80], fill=(120, 145, 180), font=f_bot)
-        draw.text((WIDTH - 240, HEIGHT - 34), "IRAM AI Video", fill=self.accent_color, font=get_font_for_text("IRAM", 18, bold=True))
+        if not self.is_shorts:
+            # Bottom status bar for landscape
+            draw.line([(0, self.height - 45), (self.width, self.height - 45)], fill=(30, 44, 70, 255), width=1)
+            f_bot = get_font_for_text(video_title, 18, bold=False)
+            draw.text((60, self.height - 34), video_title[:80], fill=(120, 145, 180), font=f_bot)
+            draw.text((self.width - 240, self.height - 34), "IRAM AI Video", fill=self.accent_color, font=get_font_for_text("IRAM", 18, bold=True))
+        else:
+            # Shorts top category pill
+            draw.rectangle((60, 40, 280, 85), fill=(220, 38, 38))
+            draw.text((80, 50), "★ TECH SHORTS", fill=(255, 255, 255), font=get_font_for_text("SHORTS", 18, bold=True))
+
         return img, draw
 
     def draw_card_frame(self, img: Image.Image, box: Tuple[int, int, int, int], title: str, subtitle: str = "", border_color = None) -> Tuple[int, int, int, int]:
@@ -83,7 +92,7 @@ class SlideRenderer:
         x1, y1, x2, y2 = box
         draw.rectangle(box, fill=self.card_bg, outline=bcol, width=2)
         
-        head_h = 56 if not subtitle else 78
+        head_h = 56 if not subtitle else 76
         draw.line([(x1, y1 + head_h), (x2, y1 + head_h)], fill=bcol, width=1)
         f_title = get_font_for_text(title, 22, bold=True)
         draw.text((x1 + 20, y1 + 14), title[:50], fill=(255, 255, 255), font=f_title)
@@ -97,28 +106,80 @@ class SlideRenderer:
         
         heading = scene.get("heading", "OVERVIEW")
         subheading = scene.get("subheading", "")
-        f_head = get_font_for_text(heading, 44, bold=True)
-        f_subhead = get_font_for_text(subheading, 22, bold=False)
         
-        draw.text((100, 50), heading[:65], fill=(255, 255, 255), font=f_head)
-        draw.text((100, 105), subheading[:95], fill=self.accent_color, font=f_subhead)
-
-        l_type = scene.get("layout_type", "pillars")
-        cards = scene.get("cards", [])
-
-        if l_type == "comparison" or len(cards) == 2:
-            self._render_comparison(img, cards)
-        elif l_type == "code_or_terminal":
-            self._render_terminal(img, cards, heading)
-        elif l_type == "stack_list" or len(cards) >= 4:
-            self._render_stack_list(img, cards)
-        elif l_type == "hero_metric":
-            self._render_hero_metric(img, cards)
+        if self.is_shorts:
+            # Vertical 9:16 Layout
+            self._render_vertical_shorts(img, scene, heading, subheading)
         else:
-            self._render_pillars(img, cards)
+            # Landscape 16:9 Layout
+            f_head = get_font_for_text(heading, 44, bold=True)
+            f_subhead = get_font_for_text(subheading, 22, bold=False)
+            draw.text((100, 50), heading[:65], fill=(255, 255, 255), font=f_head)
+            draw.text((100, 105), subheading[:95], fill=self.accent_color, font=f_subhead)
+
+            l_type = scene.get("layout_type", "pillars")
+            cards = scene.get("cards", [])
+
+            if l_type == "comparison" or len(cards) == 2:
+                self._render_comparison(img, cards)
+            elif l_type == "code_or_terminal":
+                self._render_terminal(img, cards, heading)
+            elif l_type == "stack_list" or len(cards) >= 4:
+                self._render_stack_list(img, cards)
+            elif l_type == "hero_metric":
+                self._render_hero_metric(img, cards)
+            else:
+                self._render_pillars(img, cards)
 
         img.save(out_path)
 
+    # --- VERTICAL YOUTUBE SHORTS (9:16) LAYOUT ---
+    def _render_vertical_shorts(self, img: Image.Image, scene: Dict[str, Any], heading: str, subheading: str):
+        draw = ImageDraw.Draw(img)
+        f_head = get_font_for_text(heading, 42, bold=True)
+        f_sub = get_font_for_text(subheading, 22, bold=False)
+
+        # Header block (y=110 to 280)
+        draw.text((60, 110), heading[:48], fill=(255, 255, 255), font=f_head)
+        wrapped_sub = wrap_text(subheading, f_sub, 960, draw)
+        sy = 175
+        for s in wrapped_sub[:2]:
+            draw.text((60, sy), s, fill=self.accent_color, font=f_sub)
+            sy += 30
+
+        cards = scene.get("cards", [])
+        num_cards = max(1, min(3, len(cards)))
+        
+        # Stacked vertical cards inside safe zone (y=260 to 1640)
+        total_avail_h = 1380
+        gap = 30
+        card_h = (total_avail_h - (num_cards - 1) * gap) // num_cards
+        card_w = 960
+        start_y = 260
+
+        for i, card in enumerate(cards[:num_cards]):
+            y = start_y + i * (card_h + gap)
+            col = self.accent_color if i % 2 == 0 else self.sec_color
+            ib = self.draw_card_frame(img, (60, y, 60 + card_w, y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
+            cdraw = ImageDraw.Draw(img)
+            
+            badge = card.get("badge")
+            by = ib[1]
+            if badge:
+                f_badge = get_font_for_text(badge, 16, bold=True)
+                cdraw.rectangle((ib[0], by, ib[0] + 160, by + 34), fill=(25, 38, 60), outline=col, width=1)
+                cdraw.text((ib[0] + 12, by + 6), badge, fill=col, font=f_badge)
+                by += 46
+
+            f_bullet = get_font_for_text(card.get("title", ""), 18, bold=False)
+            for bullet in card.get("bullets", [])[:4]:
+                wrapped = wrap_text(bullet, f_bullet, card_w - 40, cdraw)
+                for w in wrapped:
+                    cdraw.text((ib[0], by), f"⚡ {w}", fill=(190, 215, 240), font=f_bullet)
+                    by += 28
+                by += 10
+
+    # --- LANDSCAPE 16:9 METHODS ---
     def _render_pillars(self, img: Image.Image, cards: List[Dict[str, Any]]):
         num = max(1, min(3, len(cards)))
         card_w = (1720 - (num - 1) * 40) // num
@@ -169,7 +230,7 @@ class SlideRenderer:
                 by += 16
 
     def _render_terminal(self, img: Image.Image, cards: List[Dict[str, Any]], heading: str):
-        ib = self.draw_card_frame(img, (100, 180, WIDTH - 100, 900), "Terminal / Code Simulation", heading, border_color=(0, 255, 136, 200))
+        ib = self.draw_card_frame(img, (100, 180, self.width - 100, 900), "Terminal / Code Simulation", heading, border_color=(0, 255, 136, 200))
         tdraw = ImageDraw.Draw(img)
         ty = ib[1] + 10
         
@@ -190,11 +251,11 @@ class SlideRenderer:
         card_h = 155
         for i, card in enumerate(cards[:4]):
             col = self.accent_color if i % 2 == 0 else self.sec_color
-            ib = self.draw_card_frame(img, (100, y, WIDTH - 100, y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
+            ib = self.draw_card_frame(img, (100, y, self.width - 100, y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
             sdraw = ImageDraw.Draw(img)
             bullets_text = "  |  ".join(card.get("bullets", []))
             f_desc = get_font_for_text(bullets_text, 18, bold=False)
-            wrapped = wrap_text(bullets_text, f_desc, WIDTH - 260, sdraw)
+            wrapped = wrap_text(bullets_text, f_desc, self.width - 260, sdraw)
             dy = ib[1] + 6
             for w in wrapped:
                 sdraw.text((ib[0], dy), w, fill=(195, 215, 240), font=f_desc)
@@ -217,7 +278,7 @@ class SlideRenderer:
             hy += 14
 
         card2 = cards[1] if len(cards) > 1 else {}
-        ib2 = self.draw_card_frame(img, (760, 180, WIDTH - 100, 880), card2.get("title", "BREAKDOWN"), card2.get("subtitle", ""), border_color=self.sec_color)
+        ib2 = self.draw_card_frame(img, (760, 180, self.width - 100, 880), card2.get("title", "BREAKDOWN"), card2.get("subtitle", ""), border_color=self.sec_color)
         c2_draw = ImageDraw.Draw(img)
         ry = ib2[1]
         for b in card2.get("bullets", []):

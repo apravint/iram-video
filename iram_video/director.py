@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 from typing import Dict, Any
 from google import genai
 
@@ -8,11 +9,11 @@ DIRECTOR_SYSTEM_PROMPT = """
 You are an expert AI Video Producer and Creative Director.
 Your task is to transform any user topic, request, or brief into a structured, broadcast-quality video screenplay.
 
-You must design a sequence of visual scenes (typically 3 to 8 scenes depending on depth) that tell a compelling story.
+You must design a sequence of visual scenes that tell a compelling story.
 For each scene, you provide:
 1. "id": e.g. "scene_1", "scene_2", ...
-2. "heading": A punchy uppercase header (max 45 chars)
-3. "subheading": A clean explanatory subtitle (max 85 chars)
+2. "heading": A punchy uppercase header (max 40 chars)
+3. "subheading": A clean explanatory subtitle (max 65 chars)
 4. "layout_type": One of:
    - "pillars": 2 or 3 vertical feature cards side-by-side
    - "comparison": 2 comparative cards (e.g. Traditional vs Modern, Pros vs Cons)
@@ -23,10 +24,9 @@ For each scene, you provide:
    - "title": Card title (string)
    - "subtitle": Card subtitle (optional string)
    - "badge": Short badge text (optional, e.g. "Rust", "Core", "Speed")
-   - "bullets": Array of bullet points (each 1-2 sentences, max 90 chars per bullet)
+   - "bullets": Array of bullet points (each 1-2 sentences, max 80 chars per bullet)
 6. "narration": The EXACT spoken voiceover script for the narrator.
    - Natural, highly engaging, professional tone.
-   - Paced around 35 to 55 words per scene (approx 15-25 seconds spoken).
    - Conversational, authoritative, no robotic fluff.
 
 Also provide:
@@ -43,17 +43,36 @@ Also provide:
 CRITICAL: Return ONLY valid JSON with no markdown formatting or code blocks.
 """
 
+FALLBACK_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3-flash-preview",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-flash-latest"
+]
+
 class Director:
-    def __init__(self, api_key: str = None, model: str = "gemini-3.8-flash"):
+    def __init__(self, api_key: str = None, model: str = None):
         self.model = model
         if api_key:
             self.client = genai.Client(api_key=api_key)
         else:
             self.client = genai.Client()
 
-    def direct(self, prompt: str, scene_count: int = None, style_hint: str = None, language: str = "en") -> Dict[str, Any]:
-        """Queries Google Gemini 3.8 Flash to outline and write the complete video screenplay in English or Tamil."""
+    def direct(self, prompt: str, scene_count: int = None, style_hint: str = None, language: str = "en", is_shorts: bool = False) -> Dict[str, Any]:
+        """Queries Google Gemini to outline and write the screenplay with multi-model fallback."""
         user_msg = f"User Prompt / Video Topic: {prompt}\n"
+        
+        if is_shorts:
+            user_msg += (
+                "FORMAT REQUIREMENT: YOUTUBE SHORTS (VERTICAL 9:16).\n"
+                "- Pacing MUST be ultra fast-paced and punchy (3 scenes total, STRICTLY under 45 seconds spoken audio).\n"
+                "- Each scene narration must be 20 to 28 words maximum (fast hook, immediate value, loopable outro).\n"
+                "- Add '#Shorts' to the end of the video_title and in the description.\n"
+            )
+            if not scene_count:
+                scene_count = 3
+        
         if scene_count:
             user_msg += f"Target Scene Count: {scene_count} scenes.\n"
         if style_hint:
@@ -69,27 +88,35 @@ class Director:
         else:
             user_msg += "LANGUAGE REQUIREMENT: Produce the screenplay in English.\n"
 
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=[DIRECTOR_SYSTEM_PROMPT + "\n\n" + user_msg]
-        )
+        models_to_try = [self.model] if self.model else FALLBACK_MODELS
+        last_error = None
 
-        raw = response.text.strip()
-        if raw.startswith("```json"):
-            raw = raw[7:]
-        elif raw.startswith("```"):
-            raw = raw[3:]
-        if raw.endswith("```"):
-            raw = raw[:-3]
-        raw = raw.strip()
+        for m in models_to_try:
+            try:
+                response = self.client.models.generate_content(
+                    model=m,
+                    contents=[DIRECTOR_SYSTEM_PROMPT + "\n\n" + user_msg]
+                )
+                raw = response.text.strip()
+                if raw.startswith("```json"):
+                    raw = raw[7:]
+                elif raw.startswith("```"):
+                    raw = raw[3:]
+                if raw.endswith("```"):
+                    raw = raw[:-3]
+                raw = raw.strip()
 
-        try:
-            screenplay = json.loads(raw)
-        except json.JSONDecodeError as e:
-            match = re.search(r"\{.*\}", raw, re.DOTALL)
-            if match:
-                screenplay = json.loads(match.group(0))
-            else:
-                raise ValueError(f"Failed to parse Google Gemini screenplay JSON: {e}\nRaw output: {raw[:300]}")
+                try:
+                    screenplay = json.loads(raw)
+                    return screenplay
+                except json.JSONDecodeError as e:
+                    match = re.search(r"\{.*\}", raw, re.DOTALL)
+                    if match:
+                        return json.loads(match.group(0))
+                    raise ValueError(f"Failed to parse JSON: {e}")
+            except Exception as e:
+                print(f"[Notice] Model {m} unavailable ({e}), trying fallback...")
+                last_error = e
+                time.sleep(1)
 
-        return screenplay
+        raise RuntimeError(f"All Google Gemini models exhausted: {last_error}")

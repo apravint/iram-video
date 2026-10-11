@@ -14,7 +14,6 @@ from .compiler import VideoCompiler
 from .thumbnail import generate_thumbnail
 
 def slugify(text: str) -> str:
-    # Handle both English and Tamil transliterated slugs
     clean = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip().lower()
     slug = re.sub(r"[-\s]+", "_", clean)[:40]
     return slug or "iram_video_output"
@@ -22,15 +21,16 @@ def slugify(text: str) -> str:
 def main():
     parser = argparse.ArgumentParser(
         prog="iram-video",
-        description="Universal Prompt-to-Video Engine (English & Tamil) powered by Google Gemini, Edge TTS, PIL & FFMPEG."
+        description="Universal Prompt-to-Video Engine (Landscape & YouTube Shorts, English & தமிழ்)."
     )
     parser.add_argument("prompt", help="Topic, brief, or prompt for the video (English or தமிழ்)")
     parser.add_argument("-o", "--output", help="Output MP4 file path (default: ./<slug>.mp4)")
+    parser.add_argument("--shorts", action="store_true", help="Generate as vertical YouTube Shorts (9:16, 1080x1920, < 60s)")
     parser.add_argument("--lang", default="auto", choices=["auto", "en", "ta", "tamil", "english"], help="Language: 'en' for English, 'ta' for Tamil, 'auto' for auto-detection (default: auto)")
-    parser.add_argument("--voice", default="default", help="Voice persona ('aria', 'christopher', 'jenny', 'pallavi' (Tamil female), 'valluvar' (Tamil male), etc.)")
+    parser.add_argument("--voice", default="default", help="Voice persona ('aria', 'christopher', 'jenny', 'pallavi' [Tamil female], 'valluvar' [Tamil male], etc.)")
     parser.add_argument("--scenes", type=int, default=None, help="Desired scene count (default: auto)")
     parser.add_argument("--music", default="cyber", choices=["cyber", "lofi", "tech", "ambient", "none"], help="Background music mood (default: cyber)")
-    parser.add_argument("--no-thumbnail", action="store_true", help="Skip YouTube thumbnail generation")
+    parser.add_argument("--no-thumbnail", action="store_true", help="Skip thumbnail generation")
     parser.add_argument("--style", default=None, help="Style hint for the director (e.g. 'dark mode', 'educational', 'fast-paced')")
 
     args = parser.parse_args()
@@ -44,7 +44,13 @@ def main():
     else:
         lang = "en"
 
+    is_shorts = args.shorts
+    format_label = "YouTube Shorts (Vertical 9:16, 1080x1920)" if is_shorts else "Landscape (16:9, 1920x1080)"
+
     slug = slugify(args.prompt)
+    if is_shorts and not slug.endswith("_shorts"):
+        slug += "_shorts"
+
     output_mp4 = Path(args.output).resolve() if args.output else Path(f"./{slug}.mp4").resolve()
     thumb_png = output_mp4.with_suffix(".png")
     meta_txt = output_mp4.with_suffix(".txt")
@@ -52,6 +58,7 @@ def main():
     lang_display = "தமிழ் (Tamil)" if lang == "ta" else "English"
     print(f"\n🎬 [IRAM VIDEO ENGINE] Initializing Video Generation Pipeline")
     print(f"► Prompt: \"{args.prompt}\"")
+    print(f"► Format: {format_label}")
     print(f"► Language: {lang_display} | Music Mood: {args.music}")
     print(f"► Output Target: {output_mp4}\n")
 
@@ -61,36 +68,47 @@ def main():
         slides_dir = work_dir / "slides"
         slides_dir.mkdir(parents=True, exist_ok=True)
 
-        # 1. Direct with Google Gemini (Bilingual)
-        print(f"🧠 [1/5] Directing screenplay with Google Gemini 3.8 Flash ({lang_display})...")
+        # 1. Direct with Google Gemini (Shorts-aware & Bilingual)
+        print(f"🧠 [1/5] Directing screenplay with Google Gemini 3.8 Flash ({format_label})...")
         director = Director()
         try:
-            screenplay = director.direct(args.prompt, scene_count=args.scenes, style_hint=args.style, language=lang)
+            screenplay = director.direct(
+                args.prompt,
+                scene_count=args.scenes,
+                style_hint=args.style,
+                language=lang,
+                is_shorts=is_shorts
+            )
         except Exception as e:
             print(f"❌ Failed to direct screenplay with Google Gemini: {e}")
             sys.exit(1)
 
         video_title = screenplay.get("video_title", args.prompt[:60])
+        if is_shorts and "#Shorts" not in video_title and "#shorts" not in video_title:
+            video_title += " #Shorts"
+
         scenes = screenplay.get("scenes", [])
         theme_palette = screenplay.get("theme_palette", {})
         print(f"✓ Screenplay ready: \"{video_title}\" ({len(scenes)} scenes)")
 
-        # 2. Voiceover Synthesis (Auto-selects Tamil or English neural studio voice)
+        # 2. Voiceover Synthesis (Snappy pacing for Shorts)
+        rate = "+4%" if is_shorts else "+2%"
         print(f"🎙️  [2/5] Synthesizing neural voiceover ({lang_display})...")
-        voice_synth = VoiceSynthesizer(voice_key=args.voice, language=lang)
+        voice_synth = VoiceSynthesizer(voice_key=args.voice, language=lang, rate=rate)
         scenes = voice_synth.synthesize(scenes, audio_dir)
         total_duration = sum(s["duration"] for s in scenes)
         print(f"✓ Voiceover complete using voice '{voice_synth.voice}': {total_duration:.1f}s total duration")
 
-        # 3. Slide Frame Rendering (Supports Tamil Unicode + English)
-        print(f"🎨 [3/5] Rendering 1080p graphic slide frames ({lang_display} typography)...")
-        renderer = SlideRenderer(theme=theme_palette)
+        # 3. Slide Frame Rendering (Vertical 9:16 or Landscape 16:9)
+        dim_str = "1080x1920" if is_shorts else "1920x1080"
+        print(f"🎨 [3/5] Rendering {dim_str} slide frames ({lang_display} typography)...")
+        renderer = SlideRenderer(theme=theme_palette, is_shorts=is_shorts)
         slide_paths = []
         for i, scene in enumerate(scenes):
             out_slide = slides_dir / f"{scene['id']}.png"
             renderer.render_scene(scene, video_title, out_slide)
             slide_paths.append(out_slide)
-        print(f"✓ Rendered {len(slide_paths)} 1080p slide frames")
+        print(f"✓ Rendered {len(slide_paths)} {dim_str} slide frames")
 
         # 4. Background Music Synthesis
         bg_music_wav = work_dir / "bg_music.wav"
@@ -102,7 +120,7 @@ def main():
             bg_music_wav = None
 
         # 5. Master Video Compilation
-        print("⚙️  [5/5] Compiling master 1080p MP4 with FFMPEG...")
+        print(f"⚙️  [5/5] Compiling master {dim_str} MP4 with FFMPEG...")
         compiler = VideoCompiler(work_dir)
         compiler.compile(scenes, slide_paths, bg_music_wav, output_mp4)
         print(f"🎉 MASTER VIDEO GENERATED: {output_mp4}")
@@ -110,11 +128,15 @@ def main():
         # 6. Thumbnail Generation
         if not args.no_thumbnail:
             bullets = [s.get("heading", "") for s in scenes]
-            generate_thumbnail(video_title, bullets, theme_palette, thumb_png)
+            generate_thumbnail(video_title, bullets, theme_palette, thumb_png, is_shorts=is_shorts)
             print(f"🖼️  YOUTUBE THUMBNAIL: {thumb_png}")
 
         # 7. Metadata Export
         yt_meta = screenplay.get("youtube_metadata", {})
+        tags = yt_meta.get("tags", [])
+        if is_shorts and "Shorts" not in tags and "#Shorts" not in tags:
+            tags.insert(0, "#Shorts")
+
         with open(meta_txt, "w") as f:
             f.write(f"TITLE:\n{video_title}\n\n")
             f.write(f"DESCRIPTION:\n{yt_meta.get('description', '')}\n\n")
@@ -125,11 +147,11 @@ def main():
                 secs = int(curr_sec % 60)
                 f.write(f"{mins}:{secs:02d} {s.get('heading', '')}\n")
                 curr_sec += s["duration"]
-            f.write(f"\nTAGS:\n{', '.join(yt_meta.get('tags', []))}\n")
+            f.write(f"\nTAGS:\n{', '.join(tags)}\n")
         print(f"📋 YOUTUBE METADATA: {meta_txt}")
 
         print("\n" + "="*60)
-        print(f"✅ Video creation complete ({lang_display})!")
+        print(f"✅ Video creation complete ({format_label})!")
         print(f"• Video:     {output_mp4} ({total_duration:.1f}s)")
         if not args.no_thumbnail:
             print(f"• Thumbnail: {thumb_png}")
