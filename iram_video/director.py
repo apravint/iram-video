@@ -114,6 +114,7 @@ class Director:
                 "- Write video_title, headings, subheadings, cards titles, bullets, and narration in natural, high-quality, fluent Tamil (தமிழ்).\n"
                 "- Spoken narration must be written in clear spoken/standard Tamil suitable for Tamil YouTube tech channels.\n"
                 "- Keep technical terms, acronyms, or code in English/Tanglish where standard (e.g. Linux, Python, AI, API).\n"
+                "- CRITICAL: Always write 'search_query' and 'ai_prompt' inside 'broll_beats' in descriptive English (e.g. 'Chennai Metro train station', 'underground railway tunnel construction') to maximize visual stock matches from global archives.\n"
             )
         else:
             user_msg += "LANGUAGE REQUIREMENT: Produce the screenplay in English.\n"
