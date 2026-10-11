@@ -69,15 +69,16 @@ def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], ou
         fta_cat, fen_cat = get_fonts(24)
         draw_mixed_line(draw, 120, 435, "★ YOUTUBE SHORTS", (255, 255, 255), fta_cat, fen_cat)
 
-        words = title.split(" ")
-        mid = max(1, len(words) // 2)
-        line1 = " ".join(words[:mid])
-        line2 = " ".join(words[mid:])
-
-        fta_l1, fen_l1 = get_fonts(54)
-        fta_l2, fen_l2 = get_fonts(56)
-        draw_mixed_line(draw, 100, 530, line1[:28], (255, 255, 255), fta_l1, fen_l1)
-        draw_mixed_line(draw, 100, 620, line2[:30], accent_color, fta_l2, fen_l2)
+        clean_title = title.replace("#Shorts", "").replace("#shorts", "").strip()
+        fta_title, fen_title = get_fonts(50)
+        from .renderer import wrap_text
+        title_lines = wrap_text(clean_title, fta_title, fen_title, 850, draw)
+        
+        y = 530
+        for i, line in enumerate(title_lines[:2]):
+            col = (255, 255, 255) if i == 0 else accent_color
+            draw_mixed_line(draw, 100, y, line, col, fta_title, fen_title)
+            y += 80
 
         draw.rectangle((100, 750, w - 100, 830), fill=(24, 36, 60), outline=sec_color, width=2)
         fta_call, fen_call = get_fonts(26)
@@ -95,15 +96,15 @@ def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], ou
         fta_cat, fen_cat = get_fonts(22)
         draw_mixed_line(draw, 110, 132, "★ FEATURED GUIDE", (255, 255, 255), fta_cat, fen_cat)
 
-        words = title.split(" ")
-        mid = max(1, len(words) // 2)
-        line1 = " ".join(words[:mid])
-        line2 = " ".join(words[mid:])
-
-        fta_line1, fen_line1 = get_fonts(46)
-        fta_line2, fen_line2 = get_fonts(48)
-        draw_mixed_line(draw, 90, 210, line1[:30], (255, 255, 255), fta_line1, fen_line1)
-        draw_mixed_line(draw, 90, 280, line2[:32], accent_color, fta_line2, fen_line2)
+        clean_title = title.replace("#Shorts", "").replace("#shorts", "").strip()
+        fta_l, fen_l = get_fonts(44)
+        from .renderer import wrap_text
+        title_lines = wrap_text(clean_title, fta_l, fen_l, 560, draw)
+        y = 210
+        for i, line in enumerate(title_lines[:2]):
+            col = (255, 255, 255) if i == 0 else accent_color
+            draw_mixed_line(draw, 90, y, line, col, fta_l, fen_l)
+            y += 70
 
         draw.rectangle((90, 380, 650, 440), fill=(24, 36, 60), outline=sec_color, width=2)
         fta_subpill, fen_subpill = get_fonts(22)
