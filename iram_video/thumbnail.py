@@ -2,12 +2,17 @@ from pathlib import Path
 from typing import Dict, Any, List
 from PIL import Image, ImageDraw, ImageFont
 
-FONT_BOLD_PATH = "/home/apravint/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFontPropo-Bold.ttf"
+FONT_EN_BOLD = "/home/apravint/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFontPropo-Bold.ttf"
+FONT_TA_BOLD = "/usr/share/fonts/truetype/noto/NotoSansTamil-Bold.ttf"
 W, H = 1280, 720
 
-def get_font(size: int):
+def is_tamil_text(text: str) -> bool:
+    return any("\u0b80" <= c <= "\u0bff" for c in str(text))
+
+def get_font_for_text(text: str, size: int):
+    p = FONT_TA_BOLD if is_tamil_text(text) else FONT_EN_BOLD
     try:
-        return ImageFont.truetype(FONT_BOLD_PATH, size)
+        return ImageFont.truetype(p, size)
     except Exception:
         return ImageFont.load_default()
 
@@ -19,7 +24,6 @@ def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], ou
     img = Image.new("RGBA", (W, H), bg_color)
     draw = ImageDraw.Draw(img)
 
-    # Top accent line
     for x in range(W):
         r = int(accent_color[0] + (sec_color[0] - accent_color[0]) * (x / W))
         g = int(accent_color[1] + (sec_color[1] - accent_color[1]) * (x / W))
@@ -30,32 +34,34 @@ def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], ou
     draw.rectangle((60, 80, 680, 640), fill=(16, 24, 42), outline=accent_color, width=3)
     
     # Category Pill
-    draw.rectangle((90, 120, 380, 170), fill=(220, 38, 38))
-    draw.text((110, 132), "★ FEATURED GUIDE", fill=(255, 255, 255), font=get_font(22))
+    draw.rectangle((90, 120, 390, 170), fill=(220, 38, 38))
+    f_cat = get_font_for_text("★ FEATURED GUIDE", 22)
+    draw.text((110, 132), "★ FEATURED GUIDE", fill=(255, 255, 255), font=f_cat)
 
-    # Big Title split
-    words = title.upper().split(" ")
+    words = title.split(" ")
     mid = max(1, len(words) // 2)
     line1 = " ".join(words[:mid])
     line2 = " ".join(words[mid:])
 
-    draw.text((90, 210), line1[:25], fill=(255, 255, 255), font=get_font(52))
-    draw.text((90, 280), line2[:28], fill=accent_color, font=get_font(56))
+    f_line1 = get_font_for_text(line1, 46)
+    f_line2 = get_font_for_text(line2, 48)
 
-    # Callout pill
+    draw.text((90, 210), line1[:30], fill=(255, 255, 255), font=f_line1)
+    draw.text((90, 280), line2[:32], fill=accent_color, font=f_line2)
+
     draw.rectangle((90, 380, 650, 440), fill=(24, 36, 60), outline=sec_color, width=2)
-    draw.text((110, 396), "COMPLETE WALKTHROUGH", fill=(255, 215, 0), font=get_font(24))
+    f_subpill = get_font_for_text("COMPLETE WALKTHROUGH", 22)
+    draw.text((110, 398), "COMPLETE WALKTHROUGH", fill=(255, 215, 0), font=f_subpill)
 
     # Right Side Checklist Box
     draw.rectangle((720, 80, 1220, 640), fill=(14, 20, 35), outline=sec_color, width=2)
-    draw.text((750, 120), "WHAT YOU LEARN:", fill=(255, 255, 255), font=get_font(26))
+    draw.text((750, 120), "WHAT YOU LEARN:", fill=(255, 255, 255), font=get_font_for_text("WHAT", 26))
 
     cy = 190
-    f_check = get_font(20)
     for b in (bullets[:5] or ["Core Architecture Explained", "Step-by-Step Implementation", "Production Best Practices", "Live Demo & Source Code"]):
-        draw.text((750, cy), f"⚡ {b[:38]}", fill=(200, 225, 255), font=f_check)
+        f_check = get_font_for_text(b, 19)
+        draw.text((750, cy), f"⚡ {b[:36]}", fill=(200, 225, 255), font=f_check)
         cy += 65
 
-    # Overall border
     draw.rectangle((0, 0, W - 1, H - 1), outline=accent_color, width=3)
     img.save(output_path)

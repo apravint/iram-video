@@ -4,18 +4,33 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 VOICE_MAP = {
-    "aria": "en-US-AriaNeural",            # Female: Clear, confident, positive (Default)
-    "jenny": "en-US-JennyNeural",          # Female: Friendly, conversational
-    "emma": "en-US-EmmaNeural",            # Female: Cheerful, clear
-    "christopher": "en-US-ChristopherNeural", # Male: Authoritative, tech narrator
-    "guy": "en-US-GuyNeural",              # Male: Energetic, passionate
-    "brian": "en-US-BrianNeural",          # Male: Casual, approachable
-    "eric": "en-US-EricNeural"             # Male: Rational, technical
+    # English Voices
+    "aria": "en-US-AriaNeural",            # Female English: Confident, clear (Default EN)
+    "jenny": "en-US-JennyNeural",          # Female English: Friendly
+    "emma": "en-US-EmmaNeural",            # Female English: Cheerful
+    "christopher": "en-US-ChristopherNeural", # Male English: Authoritative tech
+    "guy": "en-US-GuyNeural",              # Male English: Energetic
+    "brian": "en-US-BrianNeural",          # Male English: Casual
+    "eric": "en-US-EricNeural",            # Male English: Rational
+
+    # Tamil Voices (தமிழ்)
+    "pallavi": "ta-IN-PallaviNeural",      # Female Tamil: Friendly, positive (Default TA)
+    "valluvar": "ta-IN-ValluvarNeural",    # Male Tamil: Friendly, authoritative
+    "tamil-female": "ta-IN-PallaviNeural",
+    "tamil-male": "ta-IN-ValluvarNeural"
 }
 
 class VoiceSynthesizer:
-    def __init__(self, voice_key: str = "aria", rate: str = "+2%"):
-        self.voice = VOICE_MAP.get(voice_key.lower(), voice_key)
+    def __init__(self, voice_key: str = None, language: str = "en", rate: str = "+2%"):
+        self.language = language.lower()
+        if not voice_key or voice_key == "default":
+            if self.language in ["ta", "tamil"]:
+                self.voice = "ta-IN-PallaviNeural"
+            else:
+                self.voice = "en-US-AriaNeural"
+        else:
+            self.voice = VOICE_MAP.get(voice_key.lower(), voice_key)
+            
         self.rate = rate
 
     def get_duration(self, audio_file: Path) -> float:

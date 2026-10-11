@@ -2,13 +2,22 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
-FONT_BOLD_PATH = "/home/apravint/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFontPropo-Bold.ttf"
-FONT_REG_PATH = "/home/apravint/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFontPropo-Regular.ttf"
+FONT_EN_BOLD = "/home/apravint/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFontPropo-Bold.ttf"
+FONT_EN_REG = "/home/apravint/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFontPropo-Regular.ttf"
+
+FONT_TA_BOLD = "/usr/share/fonts/truetype/noto/NotoSansTamil-Bold.ttf"
+FONT_TA_REG = "/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf"
 
 WIDTH, HEIGHT = 1920, 1080
 
-def get_font(size: int, bold: bool = False):
-    p = FONT_BOLD_PATH if bold else FONT_REG_PATH
+def is_tamil_text(text: str) -> bool:
+    return any("\u0b80" <= c <= "\u0bff" for c in str(text))
+
+def get_font_for_text(text: str, size: int, bold: bool = False):
+    if is_tamil_text(text):
+        p = FONT_TA_BOLD if bold else FONT_TA_REG
+    else:
+        p = FONT_EN_BOLD if bold else FONT_EN_REG
     try:
         return ImageFont.truetype(p, size)
     except Exception:
@@ -63,8 +72,9 @@ class SlideRenderer:
 
         # Bottom status bar
         draw.line([(0, HEIGHT - 45), (WIDTH, HEIGHT - 45)], fill=(30, 44, 70, 255), width=1)
-        draw.text((60, HEIGHT - 34), video_title[:80], fill=(120, 145, 180), font=get_font(18, bold=False))
-        draw.text((WIDTH - 240, HEIGHT - 34), "IRAM AI Video", fill=self.accent_color, font=get_font(18, bold=True))
+        f_bot = get_font_for_text(video_title, 18, bold=False)
+        draw.text((60, HEIGHT - 34), video_title[:80], fill=(120, 145, 180), font=f_bot)
+        draw.text((WIDTH - 240, HEIGHT - 34), "IRAM AI Video", fill=self.accent_color, font=get_font_for_text("IRAM", 18, bold=True))
         return img, draw
 
     def draw_card_frame(self, img: Image.Image, box: Tuple[int, int, int, int], title: str, subtitle: str = "", border_color = None) -> Tuple[int, int, int, int]:
@@ -73,21 +83,25 @@ class SlideRenderer:
         x1, y1, x2, y2 = box
         draw.rectangle(box, fill=self.card_bg, outline=bcol, width=2)
         
-        head_h = 56 if not subtitle else 76
+        head_h = 56 if not subtitle else 78
         draw.line([(x1, y1 + head_h), (x2, y1 + head_h)], fill=bcol, width=1)
-        draw.text((x1 + 20, y1 + 14), title[:40], fill=(255, 255, 255), font=get_font(22, bold=True))
+        f_title = get_font_for_text(title, 22, bold=True)
+        draw.text((x1 + 20, y1 + 14), title[:50], fill=(255, 255, 255), font=f_title)
         if subtitle:
-            draw.text((x1 + 20, y1 + 46), subtitle[:55], fill=(130, 160, 200), font=get_font(15, bold=False))
+            f_sub = get_font_for_text(subtitle, 15, bold=False)
+            draw.text((x1 + 20, y1 + 46), subtitle[:65], fill=(130, 160, 200), font=f_sub)
         return (x1 + 20, y1 + head_h + 16, x2 - 20, y2 - 16)
 
     def render_scene(self, scene: Dict[str, Any], video_title: str, out_path: Path):
         img, draw = self.create_canvas(video_title)
         
-        # Header & Subtitle
         heading = scene.get("heading", "OVERVIEW")
         subheading = scene.get("subheading", "")
-        draw.text((100, 50), heading[:55], fill=(255, 255, 255), font=get_font(44, bold=True))
-        draw.text((100, 105), subheading[:85], fill=self.accent_color, font=get_font(22, bold=False))
+        f_head = get_font_for_text(heading, 44, bold=True)
+        f_subhead = get_font_for_text(subheading, 22, bold=False)
+        
+        draw.text((100, 50), heading[:65], fill=(255, 255, 255), font=f_head)
+        draw.text((100, 105), subheading[:95], fill=self.accent_color, font=f_subhead)
 
         l_type = scene.get("layout_type", "pillars")
         cards = scene.get("cards", [])
@@ -117,22 +131,21 @@ class SlideRenderer:
             ib = self.draw_card_frame(img, (x, card_y, x + card_w, card_y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
             cdraw = ImageDraw.Draw(img)
             
-            # Badge
             badge = card.get("badge")
             by = ib[1]
             if badge:
+                f_badge = get_font_for_text(badge, 15, bold=True)
                 cdraw.rectangle((ib[0], by, ib[0] + 160, by + 34), fill=(25, 38, 60), outline=col, width=1)
-                cdraw.text((ib[0] + 12, by + 6), badge, fill=col, font=get_font(15, bold=True))
+                cdraw.text((ib[0] + 12, by + 6), badge, fill=col, font=f_badge)
                 by += 50
                 
-            # Bullets
-            f_bullet = get_font(17, bold=False)
             for bullet in card.get("bullets", []):
+                f_bullet = get_font_for_text(bullet, 17, bold=False)
                 wrapped = wrap_text(bullet, f_bullet, card_w - 40, cdraw)
                 for w in wrapped:
                     cdraw.text((ib[0], by), f"• {w}", fill=(190, 215, 240), font=f_bullet)
-                    by += 24
-                by += 14
+                    by += 25
+                by += 12
 
     def _render_comparison(self, img: Image.Image, cards: List[Dict[str, Any]]):
         col_w = 830
@@ -146,9 +159,9 @@ class SlideRenderer:
             ib = self.draw_card_frame(img, (x, card_y, x + col_w, card_y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
             cdraw = ImageDraw.Draw(img)
             by = ib[1]
-            f_b = get_font(18, bold=False)
             for bullet in card.get("bullets", []):
-                cdraw.text((ib[0], by), "✓", fill=col, font=get_font(20, bold=True))
+                f_b = get_font_for_text(bullet, 18, bold=False)
+                cdraw.text((ib[0], by), "✓", fill=col, font=get_font_for_text("✓", 20, bold=True))
                 wrapped = wrap_text(bullet, f_b, col_w - 50, cdraw)
                 for w in wrapped:
                     cdraw.text((ib[0] + 28, by), w, fill=(195, 215, 240), font=f_b)
@@ -156,19 +169,18 @@ class SlideRenderer:
                 by += 16
 
     def _render_terminal(self, img: Image.Image, cards: List[Dict[str, Any]], heading: str):
-        # Top terminal box
         ib = self.draw_card_frame(img, (100, 180, WIDTH - 100, 900), "Terminal / Code Simulation", heading, border_color=(0, 255, 136, 200))
         tdraw = ImageDraw.Draw(img)
-        f_term = get_font(18, bold=False)
         ty = ib[1] + 10
         
-        # Generate lines from card bullets
         for card in cards:
             title = card.get("title", "")
             if title:
-                tdraw.text((ib[0] + 10, ty), f"$ {title}", fill=(0, 255, 136), font=get_font(20, bold=True))
+                f_t = get_font_for_text(title, 20, bold=True)
+                tdraw.text((ib[0] + 10, ty), f"$ {title}", fill=(0, 255, 136), font=f_t)
                 ty += 34
             for b in card.get("bullets", []):
+                f_term = get_font_for_text(b, 18, bold=False)
                 tdraw.text((ib[0] + 25, ty), f"> {b}", fill=(200, 225, 255), font=f_term)
                 ty += 28
             ty += 16
@@ -176,12 +188,12 @@ class SlideRenderer:
     def _render_stack_list(self, img: Image.Image, cards: List[Dict[str, Any]]):
         y = 180
         card_h = 155
-        f_desc = get_font(18, bold=False)
         for i, card in enumerate(cards[:4]):
             col = self.accent_color if i % 2 == 0 else self.sec_color
             ib = self.draw_card_frame(img, (100, y, WIDTH - 100, y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
             sdraw = ImageDraw.Draw(img)
             bullets_text = "  |  ".join(card.get("bullets", []))
+            f_desc = get_font_for_text(bullets_text, 18, bold=False)
             wrapped = wrap_text(bullets_text, f_desc, WIDTH - 260, sdraw)
             dy = ib[1] + 6
             for w in wrapped:
@@ -190,26 +202,26 @@ class SlideRenderer:
             y += 175
 
     def _render_hero_metric(self, img: Image.Image, cards: List[Dict[str, Any]]):
-        # Left Hero Card (w=600)
         card1 = cards[0] if cards else {}
         ib1 = self.draw_card_frame(img, (100, 180, 720, 880), card1.get("title", "HIGHLIGHT"), "", border_color=self.accent_color)
         c1_draw = ImageDraw.Draw(img)
-        c1_draw.text((ib1[0] + 20, ib1[1] + 40), card1.get("badge", "★ 100%"), fill=self.accent_color, font=get_font(60, bold=True))
-        f_b = get_font(18, bold=False)
+        f_hero = get_font_for_text(card1.get("badge", "★ 100%"), 60, bold=True)
+        c1_draw.text((ib1[0] + 20, ib1[1] + 40), card1.get("badge", "★ 100%"), fill=self.accent_color, font=f_hero)
         hy = ib1[1] + 160
         for b in card1.get("bullets", []):
+            f_b = get_font_for_text(b, 18, bold=False)
             wrapped = wrap_text(b, f_b, 540, c1_draw)
             for w in wrapped:
                 c1_draw.text((ib1[0] + 20, hy), f"• {w}", fill=(190, 215, 240), font=f_b)
                 hy += 26
             hy += 14
 
-        # Right Card (w=1040)
         card2 = cards[1] if len(cards) > 1 else {}
         ib2 = self.draw_card_frame(img, (760, 180, WIDTH - 100, 880), card2.get("title", "BREAKDOWN"), card2.get("subtitle", ""), border_color=self.sec_color)
         c2_draw = ImageDraw.Draw(img)
         ry = ib2[1]
         for b in card2.get("bullets", []):
+            f_b = get_font_for_text(b, 18, bold=False)
             wrapped = wrap_text(b, f_b, 980, c2_draw)
             for w in wrapped:
                 c2_draw.text((ib2[0] + 20, ry), f"✓ {w}", fill=(190, 215, 240), font=f_b)

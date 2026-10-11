@@ -8,7 +8,7 @@ DIRECTOR_SYSTEM_PROMPT = """
 You are an expert AI Video Producer and Creative Director.
 Your task is to transform any user topic, request, or brief into a structured, broadcast-quality video screenplay.
 
-You must design a sequence of visual scenes (typically 4 to 8 scenes depending on depth) that tell a compelling story.
+You must design a sequence of visual scenes (typically 3 to 8 scenes depending on depth) that tell a compelling story.
 For each scene, you provide:
 1. "id": e.g. "scene_1", "scene_2", ...
 2. "heading": A punchy uppercase header (max 45 chars)
@@ -25,7 +25,7 @@ For each scene, you provide:
    - "badge": Short badge text (optional, e.g. "Rust", "Core", "Speed")
    - "bullets": Array of bullet points (each 1-2 sentences, max 90 chars per bullet)
 6. "narration": The EXACT spoken voiceover script for the narrator.
-   - Natural, highly engaging, professional tech tone.
+   - Natural, highly engaging, professional tone.
    - Paced around 35 to 55 words per scene (approx 15-25 seconds spoken).
    - Conversational, authoritative, no robotic fluff.
 
@@ -51,13 +51,23 @@ class Director:
         else:
             self.client = genai.Client()
 
-    def direct(self, prompt: str, scene_count: int = None, style_hint: str = None) -> Dict[str, Any]:
-        """Queries Google Gemini 3.8 Flash to outline and write the complete video screenplay."""
+    def direct(self, prompt: str, scene_count: int = None, style_hint: str = None, language: str = "en") -> Dict[str, Any]:
+        """Queries Google Gemini 3.8 Flash to outline and write the complete video screenplay in English or Tamil."""
         user_msg = f"User Prompt / Video Topic: {prompt}\n"
         if scene_count:
             user_msg += f"Target Scene Count: {scene_count} scenes.\n"
         if style_hint:
             user_msg += f"Style / Tone Preference: {style_hint}\n"
+
+        if language.lower() in ["ta", "tamil"]:
+            user_msg += (
+                "LANGUAGE REQUIREMENT: Produce the ENTIRE screenplay in Tamil (தமிழ்).\n"
+                "- Write video_title, headings, subheadings, cards titles, bullets, and narration in natural, high-quality, fluent Tamil (தமிழ்).\n"
+                "- Spoken narration must be written in clear spoken/standard Tamil suitable for Tamil YouTube tech channels.\n"
+                "- Keep technical terms, acronyms, or code in English/Tanglish where standard (e.g. Linux, Python, AI, API).\n"
+            )
+        else:
+            user_msg += "LANGUAGE REQUIREMENT: Produce the screenplay in English.\n"
 
         response = self.client.models.generate_content(
             model=self.model,
