@@ -1,7 +1,7 @@
 import unittest
 import tempfile
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from iram_video.renderer import is_tamil_text, split_runs, get_fonts, get_mixed_width, draw_mixed_line
 from iram_video.characters import CharacterRenderer
@@ -44,6 +44,39 @@ class TestCinemaFilmEngine(unittest.TestCase):
             self.assertTrue(p_impact.exists() and p_impact.stat().st_size > 1000)
             self.assertTrue(p_whoosh.exists() and p_whoosh.stat().st_size > 1000)
             self.assertTrue(p_tele.exists() and p_tele.stat().st_size > 1000)
+
+    def test_kinetic_subtitles(self):
+        from iram_video.subtitles import KineticSubtitleGenerator
+        with tempfile.TemporaryDirectory() as td:
+            ass_out = Path(td) / "test.ass"
+            scenes = [
+                {"narration": "Artificial intelligence is expanding into cinematic storytelling", "duration": 4.0},
+                {"narration": "தானியங்கி மென்பொருள் மற்றும் கணினி பார்வை", "duration": 3.5}
+            ]
+            KineticSubtitleGenerator.generate_ass(scenes, ass_out, is_shorts=True, language="ta")
+            self.assertTrue(ass_out.exists())
+            content = ass_out.read_text(encoding="utf-8")
+            self.assertIn("[Script Info]", content)
+            self.assertIn("Dialogue: 0,", content)
+            self.assertIn("Noto Sans Tamil", content)
+
+    def test_json_ingestion(self):
+        from iram_video.cli import load_prompt_from_json
+        sample_json = Path("/home/apravint/resources/video-creator-stacks.json")
+        if sample_json.exists():
+            prompt, style = load_prompt_from_json(sample_json)
+            self.assertIn("Video Creator Projects", prompt)
+            self.assertTrue(len(prompt) > 20)
+
+    def test_emoji_mixed_typography(self):
+        img = Image.new("RGBA", (500, 100), (0, 0, 0, 255))
+        draw = ImageDraw.Draw(img)
+        fta, fen = get_fonts(24)
+        sample = "🎬 AI சினிமா & Code 🚀 🔥"
+        w = get_mixed_width(sample, fta, fen, draw)
+        self.assertTrue(w > 100)
+        end_x = draw_mixed_line(draw, 10, 10, sample, (255, 255, 255), fta, fen)
+        self.assertTrue(end_x > 100)
 
 if __name__ == "__main__":
     unittest.main()

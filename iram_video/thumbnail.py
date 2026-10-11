@@ -2,49 +2,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
-FONT_EN_BOLD = "/home/apravint/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFontPropo-Bold.ttf"
-FONT_TA_BOLD = "/usr/share/fonts/truetype/noto/NotoSansTamil-Bold.ttf"
-
-def split_runs(text: str) -> List[Tuple[str, bool]]:
-    runs = []
-    if not text:
-        return runs
-    current_run = []
-    current_is_ta = None
-    for char in text:
-        is_ta = "\u0b80" <= char <= "\u0bff"
-        if current_is_ta is None:
-            current_is_ta = is_ta
-            current_run.append(char)
-        elif is_ta == current_is_ta:
-            current_run.append(char)
-        else:
-            runs.append(("".join(current_run), current_is_ta))
-            current_run = [char]
-            current_is_ta = is_ta
-    if current_run:
-        runs.append(("".join(current_run), current_is_ta))
-    return runs
-
-def get_fonts(size: int):
-    try:
-        f_en = ImageFont.truetype(FONT_EN_BOLD, size)
-    except Exception:
-        f_en = ImageFont.load_default()
-    try:
-        f_ta = ImageFont.truetype(FONT_TA_BOLD, size)
-    except Exception:
-        f_ta = f_en
-    return f_ta, f_en
-
-def draw_mixed_line(draw: ImageDraw.Draw, x: int, y: int, text: str, fill, font_ta, font_en) -> int:
-    cx = x
-    for chunk, is_ta in split_runs(text):
-        f = font_ta if is_ta else font_en
-        draw.text((cx, y), chunk, fill=fill, font=f)
-        bbox = draw.textbbox((cx, y), chunk, font=f)
-        cx += (bbox[2] - bbox[0])
-    return cx
+from .renderer import get_fonts, draw_mixed_line, split_runs, get_mixed_width
 
 def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], output_path: Path, is_shorts: bool = False, is_cinema: bool = False, character: Optional[str] = None):
     w, h = (1080, 1920) if is_shorts else (1280, 720)

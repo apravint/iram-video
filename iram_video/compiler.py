@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from .characters import CharacterRenderer
+from .subtitles import KineticSubtitleGenerator
 
 class VideoCompiler:
     def __init__(self, work_dir: Path, is_cinema: bool = False, is_shorts: bool = False, character: Optional[str] = None):
@@ -137,7 +138,7 @@ class VideoCompiler:
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return out_clip
 
-    def compile(self, scenes: List[Dict[str, Any]], slide_paths: List[Path], bg_music: Path, final_output: Path):
+    def compile(self, scenes: List[Dict[str, Any]], slide_paths: List[Path], bg_music: Path, final_output: Path, language: str = "en", burn_subtitles: bool = True):
         clip_paths = []
         for scene, slide in zip(scenes, slide_paths):
             c = self.render_clip(scene, slide)
@@ -160,34 +161,68 @@ class VideoCompiler:
         ]
         subprocess.run(cmd_cat, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+        total_duration = sum(float(s.get("duration", 4.0)) for s in scenes)
+
+        # Prepare Post-Filters: Kinetic Subtitles & Retention Progress Bar
+        v_filters = []
+        if self.is_shorts:
+            # 1. Shorts retention progress bar (track + glowing laser fill)
+            v_filters.append("drawbox=x=0:y=1890:w=1080:h=12:color=0x111111@0.6:t=fill")
+            v_filters.append(f"drawbox=x=0:y=1890:w='min(1080,1080*(t/{max(0.1, total_duration):.2f}))':h=12:color=0x00E5FF@0.95:t=fill")
+
+        if burn_subtitles:
+            ass_path = self.work_dir / "kinetic_subtitles.ass"
+            KineticSubtitleGenerator.generate_ass(scenes, ass_path, is_shorts=self.is_shorts, language=language)
+            if ass_path.exists():
+                ass_escaped = str(ass_path).replace("\\", "/").replace(":", "\\:")
+                v_filters.append(f"ass={ass_escaped}")
+
         # Mix background audio with ducking
         music_vol = 0.24 if self.is_cinema else 0.12
+        filter_complex_list = []
+        maps = []
+
         if bg_music and bg_music.exists():
-            fc = (
+            filter_complex_list.append(
                 f"[0:a]volume=1.0[voice];"
                 f"[1:a]volume={music_vol:.2f}[bg];"
                 f"[voice][bg]amix=inputs=2:duration=first:dropout_transition=2[aout]"
             )
-            cmd_mix = [
-                "ffmpeg", "-y",
-                "-i", str(raw_concat),
-                "-i", str(bg_music),
-                "-filter_complex", fc,
-                "-map", "0:v",
-                "-map", "[aout]",
-                "-c:v", "copy",
-                "-c:a", "aac",
-                "-b:a", "256k",
-                "-movflags", "+faststart",
-                str(final_output)
-            ]
+            maps.extend(["-map", "[aout]"])
+            audio_inputs = ["-i", str(bg_music)]
         else:
-            cmd_mix = [
-                "ffmpeg", "-y",
-                "-i", str(raw_concat),
-                "-c", "copy",
-                "-movflags", "+faststart",
-                str(final_output)
-            ]
+            maps.extend(["-map", "0:a?"])
+            audio_inputs = []
+
+        cmd_mix = [
+            "ffmpeg", "-y",
+            "-i", str(raw_concat),
+            *audio_inputs
+        ]
+
+        if v_filters:
+            cmd_mix.extend([
+                "-vf", ",".join(v_filters),
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-pix_fmt", "yuv420p"
+            ])
+            maps.insert(0, "-map")
+            maps.insert(1, "0:v")
+        else:
+            cmd_mix.extend(["-c:v", "copy"])
+            maps.insert(0, "-map")
+            maps.insert(1, "0:v")
+
+        if filter_complex_list:
+            cmd_mix.extend(["-filter_complex", ";".join(filter_complex_list)])
+
+        cmd_mix.extend([
+            *maps,
+            "-c:a", "aac",
+            "-b:a", "256k",
+            "-movflags", "+faststart",
+            str(final_output)
+        ])
 
         subprocess.run(cmd_mix, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

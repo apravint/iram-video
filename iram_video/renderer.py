@@ -1,3 +1,4 @@
+import unicodedata
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from PIL import Image, ImageDraw, ImageFont
@@ -8,29 +9,62 @@ FONT_EN_REG = "/home/apravint/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerd
 FONT_TA_BOLD = "/usr/share/fonts/truetype/noto/NotoSansTamil-Bold.ttf"
 FONT_TA_REG = "/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf"
 
+FONT_EMOJI = "/home/apravint/.local/share/fonts/SegoeUI/seguiemj.ttf"
+
+_EMOJI_FONT_CACHE: Dict[int, ImageFont.FreeTypeFont] = {}
+
+def get_emoji_font(size: int):
+    """Loads and caches the scalable Segoe UI color emoji font."""
+    if size not in _EMOJI_FONT_CACHE:
+        try:
+            _EMOJI_FONT_CACHE[size] = ImageFont.truetype(FONT_EMOJI, size)
+        except Exception:
+            _EMOJI_FONT_CACHE[size] = ImageFont.load_default()
+    return _EMOJI_FONT_CACHE[size]
+
 def is_tamil_text(text: str) -> bool:
     return any("\u0b80" <= c <= "\u0bff" for c in str(text))
 
-def split_runs(text: str) -> List[Tuple[str, bool]]:
-    """Splits a string into sequential runs of Tamil vs Latin/Symbols."""
+def is_emoji_char(c: str) -> bool:
+    """Detects whether a Unicode character is an emoji, pictogram, or symbol."""
+    cp = ord(c)
+    if (0x1F300 <= cp <= 0x1FAFF or
+        0x2600 <= cp <= 0x27BF or
+        0x2B50 <= cp <= 0x2B55 or
+        0x2300 <= cp <= 0x23FF or
+        0x2190 <= cp <= 0x21FF or
+        0x200D == cp or 0xFE0E <= cp <= 0xFE0F):
+        return True
+    return unicodedata.category(c) in ("So", "Sk") and cp > 0x2000
+
+def get_char_kind(c: str) -> str:
+    """Classifies character into emoji, tamil, or english."""
+    if is_emoji_char(c):
+        return "emoji"
+    elif "\u0b80" <= c <= "\u0bff":
+        return "tamil"
+    return "english"
+
+def split_runs(text: str) -> List[Tuple[str, str]]:
+    """Splits a string into sequential runs of 'tamil', 'english', or 'emoji'."""
     runs = []
     if not text:
         return runs
     current_run = []
-    current_is_ta = None
-    for char in text:
-        is_ta = "\u0b80" <= char <= "\u0bff"
-        if current_is_ta is None:
-            current_is_ta = is_ta
+    current_kind = None
+    for char in str(text):
+        kind = get_char_kind(char)
+        if current_kind is None:
+            current_kind = kind
             current_run.append(char)
-        elif is_ta == current_is_ta:
+        elif kind == current_kind:
             current_run.append(char)
         else:
-            runs.append(("".join(current_run), current_is_ta))
+            runs.append(("".join(current_run), current_kind))
             current_run = [char]
-            current_is_ta = is_ta
+            current_kind = kind
     if current_run:
-        runs.append(("".join(current_run), current_is_ta))
+        runs.append(("".join(current_run), current_kind))
     return runs
 
 def get_fonts(size: int, bold: bool = False):
@@ -47,19 +81,34 @@ def get_fonts(size: int, bold: bool = False):
     return f_ta, f_en
 
 def get_mixed_width(text: str, font_ta, font_en, draw: ImageDraw.Draw) -> int:
+    size = getattr(font_en, "size", 28)
+    f_emoji = get_emoji_font(size)
     w = 0
-    for chunk, is_ta in split_runs(text):
-        f = font_ta if is_ta else font_en
+    for chunk, kind in split_runs(text):
+        if kind == "emoji":
+            f = f_emoji
+        elif kind == "tamil":
+            f = font_ta
+        else:
+            f = font_en
         bbox = draw.textbbox((0, 0), chunk, font=f)
         w += (bbox[2] - bbox[0])
     return w
 
 def draw_mixed_line(draw: ImageDraw.Draw, x: int, y: int, text: str, fill, font_ta, font_en) -> int:
+    size = getattr(font_en, "size", 28)
+    f_emoji = get_emoji_font(size)
     cx = x
-    for chunk, is_ta in split_runs(text):
-        f = font_ta if is_ta else font_en
-        draw.text((cx, y), chunk, fill=fill, font=f)
-        bbox = draw.textbbox((cx, y), chunk, font=f)
+    for chunk, kind in split_runs(text):
+        if kind == "emoji":
+            draw.text((cx, y), chunk, font=f_emoji, embedded_color=True)
+            bbox = draw.textbbox((cx, y), chunk, font=f_emoji)
+        elif kind == "tamil":
+            draw.text((cx, y), chunk, fill=fill, font=font_ta)
+            bbox = draw.textbbox((cx, y), chunk, font=font_ta)
+        else:
+            draw.text((cx, y), chunk, fill=fill, font=font_en)
+            bbox = draw.textbbox((cx, y), chunk, font=font_en)
         cx += (bbox[2] - bbox[0])
     return cx
 

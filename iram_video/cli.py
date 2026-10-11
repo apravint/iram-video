@@ -14,18 +14,54 @@ from .compiler import VideoCompiler
 from .thumbnail import generate_thumbnail
 from .film_director import FilmDirector
 from .film_compiler import FilmCompiler
+from .server import start_server
 
 def slugify(text: str) -> str:
     clean = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip().lower()
     slug = re.sub(r"[-\s]+", "_", clean)[:40]
     return slug or "iram_video_output"
 
+def load_prompt_from_json(json_path: Path):
+    """Extracts a rich video directing prompt and style hint from a structured JSON document."""
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if isinstance(data, list):
+        names = [item.get("name", "") for item in data[:8] if isinstance(item, dict)]
+        title = json_path.stem.replace("-", " ").title()
+        prompt = f"Comprehensive breakdown of {title}: Featuring {', '.join(names)}"
+        style = f"Educational tech showcase reviewing {len(data)} tools"
+        return prompt, style
+
+    title = data.get("title", json_path.stem.replace("-", " ").title())
+    desc = data.get("description", "")
+    workflow = data.get("workflow_stages") or data.get("architecture_pipeline") or data.get("business_logic") or ""
+
+    items = []
+    if "skills" in data and isinstance(data["skills"], list):
+        items = [s.get("name", "") for s in data["skills"][:8]]
+    elif "categories" in data and isinstance(data["categories"], dict):
+        for cat, tool_list in data["categories"].items():
+            if isinstance(tool_list, list):
+                items.extend([t.get("name", "") for t in tool_list[:3] if isinstance(t, dict)])
+    elif "offers" in data and isinstance(data["offers"], list):
+        items = [o.get("name", "") for o in data["offers"][:5]]
+
+    items_str = f" Highlights: {', '.join(items[:8])}." if items else ""
+    flow_str = f" Pipeline: {workflow}." if workflow else ""
+    prompt = f"{title}. {desc}{items_str}{flow_str}"
+    style = f"Technical and architectural deep-dive based on {json_path.name}"
+    return prompt, style
+
 def main():
     parser = argparse.ArgumentParser(
         prog="iram-video",
         description="Universal Film & Video Engine (Animation Feature Films, Cinema Trailers, Animated Characters, Shorts & Landscape, English & தமிழ்)."
     )
-    parser.add_argument("prompt", help="Topic, brief, or screenplay premise (English or தமிழ்)")
+    parser.add_argument("prompt", nargs="?", default="", help="Topic, brief, or screenplay premise (English or தமிழ்)")
+    parser.add_argument("--from-json", default=None, help="Directly ingest a structured JSON document or stack blueprint (e.g. software-factory-skills.json)")
+    parser.add_argument("--serve", action="store_true", help="Launch the local Web Studio dashboard server (default port 7860)")
+    parser.add_argument("--port", type=int, default=7860, help="Web Studio port (default: 7860)")
     parser.add_argument("-o", "--output", help="Output MP4 file path (default: ./<slug>.mp4)")
     parser.add_argument("--film", "--feature", dest="film", action="store_true", help="Generate as full Multi-Character Animated Feature Film with dialogue, procedural sets, score & rolling end credits")
     parser.add_argument("--cast", default=None, help="Cast preference (e.g. 'nova,unit-7' or 'ferris,gopher')")
@@ -40,6 +76,27 @@ def main():
     parser.add_argument("--style", default=None, help="Style hint for the director (e.g. 'dark mode', 'educational', 'fast-paced', 'epic blockbuster')")
 
     args = parser.parse_args()
+
+    if args.serve or (len(sys.argv) > 1 and sys.argv[1] == "serve"):
+        start_server(args.port)
+        return
+
+    # Ingest from JSON document if provided
+    if args.from_json:
+        json_file = Path(args.from_json).resolve()
+        if not json_file.exists():
+            print(f"❌ JSON document not found: {json_file}")
+            sys.exit(1)
+        j_prompt, j_style = load_prompt_from_json(json_file)
+        if not args.prompt:
+            args.prompt = j_prompt
+        if not args.style:
+            args.style = j_style
+        print(f"📄 [JSON INGESTION] Loaded blueprint: \"{json_file.name}\"")
+
+    if not args.prompt:
+        parser.print_help()
+        sys.exit(1)
 
     # Detect language
     lang = args.lang.lower()
@@ -233,7 +290,7 @@ def main():
         # 5. Master Video Compilation
         print(f"⚙️  [5/5] Compiling master {dim_str} MP4 with FFMPEG...")
         compiler = VideoCompiler(work_dir, is_cinema=is_cinema, is_shorts=is_shorts, character=character)
-        compiler.compile(scenes, slide_paths, bg_music_wav, output_mp4)
+        compiler.compile(scenes, slide_paths, bg_music_wav, output_mp4, language=lang)
         print(f"🎉 MASTER VIDEO GENERATED: {output_mp4}")
 
         # 6. Thumbnail Generation
