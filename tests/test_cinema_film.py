@@ -78,5 +78,16 @@ class TestCinemaFilmEngine(unittest.TestCase):
         end_x = draw_mixed_line(draw, 10, 10, sample, (255, 255, 255), fta, fen)
         self.assertTrue(end_x > 100)
 
+    def test_scene_beats_extraction(self):
+        from iram_video.b_roll import MediaFetcher
+        sample_scene = {
+            "narration": "In 2021, the James Webb Space Telescope launched into deep space. It unfolded a massive gold mirror to capture distant infrared light.",
+            "duration": 12.0
+        }
+        beats = MediaFetcher.extract_scene_beats(sample_scene, 12.0)
+        self.assertTrue(len(beats) >= 2)
+        total_dur = sum(b["duration"] for b in beats)
+        self.assertAlmostEqual(total_dur, 12.0, delta=0.1)
+
 if __name__ == "__main__":
     unittest.main()

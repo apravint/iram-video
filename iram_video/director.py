@@ -25,7 +25,10 @@ For each scene, you provide:
        - "subtitle": Card subtitle (optional string)
        - "badge": Short badge text (optional, e.g. "Rust", "Core", "Speed")
        - "bullets": Array of bullet points (each 1-2 sentences, max 80 chars per bullet)
-5. "search_query": 3 to 5 real-world descriptive keywords for B-roll stock footage/photography (e.g. "aerial drone mountain landscape", "scientist laboratory microscope", "tokyo city night timelapse")
+5. "broll_beats": Array of 3 to 6 sequential visual beats matching each sentence of the narration:
+   [
+     {"phrase": "the spoken sentence", "search_query": "3-5 word exact search keywords for real B-roll video/photo"}
+   ]
 6. "narration": The EXACT spoken voiceover script for the narrator.
    - Natural, highly engaging, professional tone.
    - Conversational, authoritative, no robotic fluff.
