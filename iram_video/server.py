@@ -94,10 +94,10 @@ HTML_DASHBOARD = """<!DOCTYPE html>
       <div class="form-group">
         <label>Production Format:</label>
         <div class="radio-grid">
-          <label class="radio-card active"><input type="radio" name="mode" value="film" checked> 🎭 Animated Feature Film</label>
+          <label class="radio-card active"><input type="radio" name="mode" value="real" checked> 🎥 Real YouTube Video (B-Roll, No Subtitles)</label>
+          <label class="radio-card"><input type="radio" name="mode" value="film"> 🎭 Animated Feature Film</label>
           <label class="radio-card"><input type="radio" name="mode" value="cinema"> 🎬 Cinema Blockbuster Trailer</label>
           <label class="radio-card"><input type="radio" name="mode" value="shorts"> 📱 YouTube Shorts (9:16)</label>
-          <label class="radio-card"><input type="radio" name="mode" value="landscape"> 🖥️ Tech Presentation (16:9)</label>
         </div>
       </div>
 
@@ -316,7 +316,9 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
             else:
                 cmd.append(prompt)
 
-            if mode == "film":
+            if mode == "real":
+                cmd.append("--real")
+            elif mode == "film":
                 cmd.append("--film")
             elif mode == "cinema":
                 cmd.append("--cinema")

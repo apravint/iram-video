@@ -20,11 +20,12 @@ For each scene, you provide:
    - "code_or_terminal": A title card with a terminal command or code block simulation and callouts
    - "stack_list": 3 to 4 horizontal layer rows (good for architectures or steps)
    - "hero_metric": A big metric/concept callout card on one side and bullet details on the other
-5. "cards": Array of 1 to 4 card objects:
-   - "title": Card title (string)
-   - "subtitle": Card subtitle (optional string)
-   - "badge": Short badge text (optional, e.g. "Rust", "Core", "Speed")
-   - "bullets": Array of bullet points (each 1-2 sentences, max 80 chars per bullet)
+    - "cards": Array of 1 to 4 card objects:
+       - "title": Card title (string)
+       - "subtitle": Card subtitle (optional string)
+       - "badge": Short badge text (optional, e.g. "Rust", "Core", "Speed")
+       - "bullets": Array of bullet points (each 1-2 sentences, max 80 chars per bullet)
+5. "search_query": 3 to 5 real-world descriptive keywords for B-roll stock footage/photography (e.g. "aerial drone mountain landscape", "scientist laboratory microscope", "tokyo city night timelapse")
 6. "narration": The EXACT spoken voiceover script for the narrator.
    - Natural, highly engaging, professional tone.
    - Conversational, authoritative, no robotic fluff.
@@ -61,10 +62,19 @@ class Director:
         else:
             self.client = genai.Client()
 
-    def direct(self, prompt: str, scene_count: int = None, style_hint: str = None, language: str = "en", is_shorts: bool = False, is_cinema: bool = False, character: str = None) -> Dict[str, Any]:
+    def direct(self, prompt: str, scene_count: int = None, style_hint: str = None, language: str = "en", is_shorts: bool = False, is_cinema: bool = False, is_real: bool = False, character: str = None) -> Dict[str, Any]:
         """Queries Google Gemini to outline and write the screenplay with multi-model fallback."""
         user_msg = f"User Prompt / Video Topic: {prompt}\n"
         
+        if is_real:
+            user_msg += (
+                "REAL YOUTUBE DOCUMENTARY DIRECTIVE:\n"
+                "- Write this screenplay like a high-retention, real YouTube documentary (Vox, Kurzgesagt, Johnny Harris, Veritasium style).\n"
+                "- Tone: Natural, intelligent, conversational, insightful, and cinematic.\n"
+                "- Real B-Roll Footage: Provide accurate 'search_query' keywords for real stock footage/photos for every scene.\n"
+                "- AVOID any cyberpunk, neon, or fictional matrix tropes. Focus on real-world concepts, science, history, tech, or nature.\n"
+            )
+
         if is_shorts:
             user_msg += (
                 "FORMAT REQUIREMENT: YOUTUBE SHORTS (VERTICAL 9:16).\n"

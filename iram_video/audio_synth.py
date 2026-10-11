@@ -81,7 +81,16 @@ def synthesize_mood_track(mood: str, duration_sec: float, output_path: Path):
             wf.writeframes(audio_int16.tobytes())
         return
 
-    if mood == "lofi":
+    if mood in ["documentary", "acoustic", "piano", "real"]:
+        # Warm Acoustic / Piano documentary progression (Cmaj7 -> G6 -> Am7 -> Fmaj7)
+        chords = [
+            [130.81, 164.81, 196.00, 246.94], # Cmaj7
+            [98.00, 146.83, 196.00, 246.94],  # G6
+            [110.00, 164.81, 220.00, 261.63], # Am7
+            [87.31, 130.81, 174.61, 261.63]   # Fmaj7
+        ]
+        chord_len = 10.0
+    elif mood == "lofi":
         # Warm Lofi progression (Am9 -> Dm9 -> G13 -> Cmaj7)
         chords = [
             [220.00, 261.63, 329.63, 493.88], # Am9

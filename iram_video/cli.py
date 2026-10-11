@@ -14,6 +14,7 @@ from .compiler import VideoCompiler
 from .thumbnail import generate_thumbnail
 from .film_director import FilmDirector
 from .film_compiler import FilmCompiler
+from .real_compiler import RealVideoCompiler
 from .server import start_server
 
 def slugify(text: str) -> str:
@@ -56,9 +57,12 @@ def load_prompt_from_json(json_path: Path):
 def main():
     parser = argparse.ArgumentParser(
         prog="iram-video",
-        description="Universal Film & Video Engine (Animation Feature Films, Cinema Trailers, Animated Characters, Shorts & Landscape, English & தமிழ்)."
+        description="Universal Film & Video Engine (Real YouTube Documentary Videos, Animation Feature Films, Cinema Trailers, Shorts & Landscape, English & தமிழ்)."
     )
     parser.add_argument("prompt", nargs="?", default="", help="Topic, brief, or screenplay premise (English or தமிழ்)")
+    parser.add_argument("--real", "--youtube", "--documentary", "--broll", dest="real", action="store_true", help="Generate as real documentary YouTube video with real 1080p/4K stock B-roll footage, photography, and acoustic score (NO cyberpunk, NO subtitles)")
+    parser.add_argument("--subtitles", action="store_true", help="Burn subtitles into the video (disabled by default)")
+    parser.add_argument("--no-subtitles", action="store_true", help="Ensure subtitles are completely disabled (default)")
     parser.add_argument("--from-json", default=None, help="Directly ingest a structured JSON document or stack blueprint (e.g. software-factory-skills.json)")
     parser.add_argument("--serve", action="store_true", help="Launch the local Web Studio dashboard server (default port 7860)")
     parser.add_argument("--port", type=int, default=7860, help="Web Studio port (default: 7860)")
@@ -71,9 +75,9 @@ def main():
     parser.add_argument("--lang", default="auto", choices=["auto", "en", "ta", "tamil", "english"], help="Language: 'en' for English, 'ta' for Tamil, 'auto' for auto-detection (default: auto)")
     parser.add_argument("--voice", default="default", help="Voice persona ('aria', 'christopher', 'jenny', 'pallavi' [Tamil female], 'valluvar' [Tamil male], etc.)")
     parser.add_argument("--scenes", type=int, default=None, help="Desired scene count (default: auto)")
-    parser.add_argument("--music", default="cyber", choices=["cyber", "lofi", "tech", "ambient", "trailer", "cinematic", "none"], help="Background music mood (default: cyber or trailer if --cinema)")
+    parser.add_argument("--music", default="auto", choices=["auto", "documentary", "acoustic", "lofi", "tech", "ambient", "trailer", "cinematic", "cyber", "none"], help="Background music mood (default: documentary for real/youtube, cyber for tech, trailer for cinema)")
     parser.add_argument("--no-thumbnail", action="store_true", help="Skip thumbnail generation")
-    parser.add_argument("--style", default=None, help="Style hint for the director (e.g. 'dark mode', 'educational', 'fast-paced', 'epic blockbuster')")
+    parser.add_argument("--style", default=None, help="Style hint for the director (e.g. 'documentary', 'realistic', 'vox style', 'educational')")
 
     args = parser.parse_args()
 
@@ -110,12 +114,21 @@ def main():
     is_film = args.film
     is_shorts = args.shorts
     is_cinema = args.cinema or is_film
+    is_real = args.real
+
+    p_low = args.prompt.lower()
+    if not is_film and not is_cinema and (args.real or any(k in p_low for k in ["real", "documentary", "history", "nature", "science", "explain", "how to", "why"])):
+        is_real = True
+
+    # Subtitles disabled by default unless explicitly requested
+    burn_subtitles = args.subtitles and not args.no_subtitles
 
     # Character selection
     character = args.character
     if character == "auto":
-        p_low = args.prompt.lower()
-        if "rust" in p_low:
+        if is_real:
+            character = None
+        elif "rust" in p_low:
             character = "ferris"
         elif "go" in p_low or "golang" in p_low:
             character = "gopher"
@@ -126,15 +139,22 @@ def main():
     elif character == "none":
         character = None
 
-    # Music default for cinema / film
+    # Music default for cinema / film / real documentary
     music_mood = args.music
-    if (is_cinema or is_film) and music_mood == "cyber":
-        music_mood = "trailer"
+    if music_mood == "auto":
+        if is_cinema or is_film:
+            music_mood = "trailer"
+        elif is_real:
+            music_mood = "documentary"
+        else:
+            music_mood = "cyber"
 
     if is_film:
         format_label = "Animated Feature Film (Multi-Character Dialogue & Procedural Sets)"
     elif is_cinema:
         format_label = "Hollywood Cinema Trailer (24 FPS, 2.39:1 Scope)" if not is_shorts else "Vertical Cinematic Shorts (24 FPS, Scope Bars)"
+    elif is_real:
+        format_label = "Real YouTube Documentary (Real B-Roll Video & 4K Photography, Acoustic Score, No Subtitles)"
     elif is_shorts:
         format_label = "YouTube Shorts (Vertical 9:16, 1080x1920)"
     else:
@@ -147,6 +167,8 @@ def main():
         slug += "_cinema"
     if is_film and not slug.endswith("_film"):
         slug += "_film"
+    if is_real and not slug.endswith("_real") and not is_shorts and not is_cinema and not is_film:
+        slug += "_real"
 
     output_mp4 = Path(args.output).resolve() if args.output else Path(f"./{slug}.mp4").resolve()
     thumb_png = output_mp4.with_suffix(".png")
@@ -245,6 +267,7 @@ def main():
                 language=lang,
                 is_shorts=is_shorts,
                 is_cinema=is_cinema,
+                is_real=is_real,
                 character=character
             )
         except Exception as e:
@@ -259,39 +282,48 @@ def main():
         theme_palette = screenplay.get("theme_palette", {})
         print(f"✓ Screenplay ready: \"{video_title}\" ({len(scenes)} scenes)")
 
-        # 2. Voiceover Synthesis (Snappy pacing for Shorts, deep pacing for Cinema)
-        rate = "+4%" if is_shorts else ("-2%" if is_cinema else "+2%")
+        # 2. Voiceover Synthesis
+        rate = "+3%" if is_shorts else ("-2%" if is_cinema else "+0%")
         print(f"🎙️  [2/5] Synthesizing neural voiceover ({lang_display})...")
         voice_synth = VoiceSynthesizer(voice_key=args.voice, language=lang, rate=rate)
         scenes = voice_synth.synthesize(scenes, audio_dir)
         total_duration = sum(s["duration"] for s in scenes)
         print(f"✓ Voiceover complete using voice '{voice_synth.voice}': {total_duration:.1f}s total duration")
 
-        # 3. Slide Frame Rendering (Vertical 9:16 or Landscape 16:9)
-        dim_str = "1080x1920" if is_shorts else "1920x1080"
-        print(f"🎨 [3/5] Rendering {dim_str} slide frames ({lang_display} typography)...")
-        renderer = SlideRenderer(theme=theme_palette, is_shorts=is_shorts)
-        slide_paths = []
-        for i, scene in enumerate(scenes):
-            out_slide = slides_dir / f"{scene['id']}.png"
-            renderer.render_scene(scene, video_title, out_slide)
-            slide_paths.append(out_slide)
-        print(f"✓ Rendered {len(slide_paths)} {dim_str} slide frames")
-
-        # 4. Background Music Synthesis
+        # 3. Background Music Synthesis
         bg_music_wav = work_dir / "bg_music.wav"
         if music_mood != "none":
-            print(f"🎵 [4/5] Synthesizing '{music_mood}' soundtrack...")
+            print(f"🎵 [3/5] Synthesizing '{music_mood}' soundtrack...")
             synthesize_mood_track(music_mood, total_duration + 5.0, bg_music_wav)
             print("✓ Soundtrack ready")
         else:
             bg_music_wav = None
 
-        # 5. Master Video Compilation
-        print(f"⚙️  [5/5] Compiling master {dim_str} MP4 with FFMPEG...")
-        compiler = VideoCompiler(work_dir, is_cinema=is_cinema, is_shorts=is_shorts, character=character)
-        compiler.compile(scenes, slide_paths, bg_music_wav, output_mp4, language=lang)
-        print(f"🎉 MASTER VIDEO GENERATED: {output_mp4}")
+        dim_str = "1080x1920" if is_shorts else "1920x1080"
+
+        # 4 & 5. Video Sourcing & Compilation
+        if is_real:
+            # --- REAL YOUTUBE DOCUMENTARY PIPELINE (REAL B-ROLL, NO SLIDES, NO CYBERPUNK, NO SUBTITLES) ---
+            print(f"🎥 [4/5] Sourcing real HD stock B-roll footage and 4K photography from public archives...")
+            real_compiler = RealVideoCompiler(work_dir, is_shorts=is_shorts)
+            print(f"⚙️  [5/5] Compiling master documentary video with acoustic score (NO subtitles)...")
+            real_compiler.compile_real_video(scenes, bg_music_wav, output_mp4)
+            print(f"🎉 MASTER REAL VIDEO GENERATED: {output_mp4}")
+        else:
+            # --- SLIDE/GRAPHICS VIDEO PIPELINE ---
+            print(f"🎨 [4/5] Rendering {dim_str} slide frames ({lang_display} typography)...")
+            renderer = SlideRenderer(theme=theme_palette, is_shorts=is_shorts)
+            slide_paths = []
+            for i, scene in enumerate(scenes):
+                out_slide = slides_dir / f"{scene['id']}.png"
+                renderer.render_scene(scene, video_title, out_slide)
+                slide_paths.append(out_slide)
+            print(f"✓ Rendered {len(slide_paths)} {dim_str} slide frames")
+
+            print(f"⚙️  [5/5] Compiling master {dim_str} MP4 with FFMPEG...")
+            compiler = VideoCompiler(work_dir, is_cinema=is_cinema, is_shorts=is_shorts, character=character)
+            compiler.compile(scenes, slide_paths, bg_music_wav, output_mp4, language=lang, burn_subtitles=burn_subtitles)
+            print(f"🎉 MASTER VIDEO GENERATED: {output_mp4}")
 
         # 6. Thumbnail Generation
         if not args.no_thumbnail:
