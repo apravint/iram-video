@@ -45,7 +45,7 @@ class MediaFetcher:
                     if not media_url or "thumb" in media_url or mime == "image/svg+xml":
                         continue
 
-                    if mime.startswith("video/"):
+                    if mime.startswith("video/") and any(media_url.lower().endswith(ext) for ext in [".mp4", ".webm", ".mkv", ".mov"]):
                         results.append({
                             "type": "video",
                             "url": media_url,
@@ -53,7 +53,7 @@ class MediaFetcher:
                             "height": h,
                             "title": p.get("title", "")
                         })
-                    elif mime.startswith("image/") and (w >= 1280 or h >= 720):
+                    elif mime in ["image/jpeg", "image/png", "image/webp"] and (w >= 1280 or h >= 720):
                         results.append({
                             "type": "image",
                             "url": media_url,
@@ -77,20 +77,28 @@ class MediaFetcher:
                     f.write(content)
 
             # Optimization: If downloaded image is gigantic (> 2560x1440), resize to 2560x1440
-            # to prevent ffmpeg zoompan from decompressing 300-megapixel images every frame.
+            # Also validates that the image file is a legitimate, readable image format.
             if out_path.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
                 try:
                     with Image.open(out_path) as img:
                         if img.width > 2560 or img.height > 1440:
                             img.thumbnail((2560, 1440), Image.Resampling.LANCZOS)
-                            rgb_img = img.convert("RGB")
-                            rgb_img.save(out_path, format="JPEG", quality=92)
-                except Exception:
-                    pass
+                        rgb_img = img.convert("RGB")
+                        rgb_img.save(out_path, format="JPEG", quality=92)
+                except Exception as img_err:
+                    # Corrupt image or unsupported document (e.g. djvu)
+                    if out_path.exists():
+                        out_path.unlink()
+                    return False
 
             return True
         except Exception as e:
             print(f"[Notice] Media download error for {url}: {e}")
+            if out_path.exists():
+                try:
+                    out_path.unlink()
+                except Exception:
+                    pass
             return False
 
     @staticmethod
