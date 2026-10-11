@@ -49,17 +49,18 @@ class VideoCompiler:
         framerate = 24 if self.is_cinema else 30
         fade_out = max(0, duration - 0.4)
 
-        filters = []
+        # Build sequential filter graph
+        fc_parts = []
+        cur_v = "[0:v]"
 
-        # 1. Base slide or motion zoom
+        # 1. Base motion (Cinematic camera dolly push-in)
         if self.is_cinema:
-            # Slow cinematic push-in (dolly zoom)
+            d_frames = int(duration * framerate) + 48
             if self.is_shorts:
-                # 1080x1920 vertical camera creeping push-in
-                filters.append("zoompan=z='min(zoom+0.0008,1.12)':d=125:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps=24")
+                fc_parts.append(f"{cur_v}zoompan=z='min(zoom+0.0008,1.12)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps={framerate}[v_bg]")
             else:
-                # 1920x1080 horizontal camera creeping push-in
-                filters.append("zoompan=z='min(zoom+0.0008,1.12)':d=125:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24")
+                fc_parts.append(f"{cur_v}zoompan=z='min(zoom+0.0008,1.12)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps={framerate}[v_bg]")
+            cur_v = "[v_bg]"
 
         # 2. Character overlay
         inputs = [
@@ -74,20 +75,13 @@ class VideoCompiler:
                 "-framerate", "8",
                 "-i", str(self.sprites_dir / "sprite_%02d.png")
             ])
-            # Position character
-            if self.is_shorts:
-                # Bottom right corner for vertical shorts
-                filters.append("[0:v][1:v]overlay=680:1440[v_base]")
-            else:
-                # Right side for widescreen presentation
-                filters.append("[0:v][1:v]overlay=1500:540[v_base]")
-            post_label = "[v_base]"
-        else:
-            post_label = "[0:v]"
-
-        post_filters = []
+            pos_x = 680 if self.is_shorts else 1500
+            pos_y = 1440 if self.is_shorts else 540
+            fc_parts.append(f"{cur_v}[1:v]overlay={pos_x}:{pos_y}[v_char]")
+            cur_v = "[v_char]"
 
         # 3. Cinema post-processing: 2.39:1 Anamorphic letterbox, color grading & film grain
+        post_filters = []
         if self.is_cinema:
             if not self.is_shorts:
                 # Hollywood 2.39:1 scope bars (top and bottom 138px bars)
@@ -106,13 +100,13 @@ class VideoCompiler:
         # 4. Fade in/out
         post_filters.append(f"fade=t=in:st=0:d=0.35,fade=t=out:st={fade_out:.2f}:d=0.35")
 
-        if self.has_character:
-            filter_complex = f"{filters[0]};{post_label}{','.join(post_filters)}[vfinal]"
+        if post_filters:
+            fc_parts.append(f"{cur_v}{','.join(post_filters)}[vfinal]")
             v_map = "[vfinal]"
         else:
-            all_v = filters + post_filters
-            filter_complex = ",".join(all_v)
-            v_map = "0:v"
+            v_map = cur_v
+
+        filter_complex = ";".join(fc_parts)
 
         # Voice processing (bass boost & cinematic room acoustics in cinema mode)
         af_opts = []
@@ -121,18 +115,15 @@ class VideoCompiler:
                 "-af", "bass=g=4:f=110,equalizer=f=3200:t=q:w=1:g=2,aecho=0.8:0.88:35:0.2"
             ])
 
+        audio_idx = 2 if self.has_character else 1
+
         cmd = [
             "ffmpeg", "-y",
             *inputs,
-            "-i", str(audio_file)
-        ]
-
-        if self.has_character:
-            cmd.extend(["-filter_complex", filter_complex, "-map", v_map, "-map", "2:a"])
-        else:
-            cmd.extend(["-vf", filter_complex, "-map", "0:v", "-map", "1:a"])
-
-        cmd.extend([
+            "-i", str(audio_file),
+            "-filter_complex", filter_complex,
+            "-map", v_map,
+            "-map", f"{audio_idx}:a",
             *af_opts,
             "-c:v", "libx264",
             "-preset", "veryfast",
@@ -141,7 +132,7 @@ class VideoCompiler:
             "-pix_fmt", "yuv420p",
             "-t", f"{duration:.3f}",
             str(out_clip)
-        ])
+        ]
 
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return out_clip
