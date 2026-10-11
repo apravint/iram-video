@@ -177,16 +177,16 @@ class VideoCompiler:
                 ass_escaped = str(ass_path).replace("\\", "/").replace(":", "\\:")
                 v_filters.append(f"ass={ass_escaped}")
 
-        # Mix background audio with ducking
-        music_vol = 0.24 if self.is_cinema else 0.12
+        # Mix background audio with dynamic sidechain ducking
+        music_vol = 0.28 if self.is_cinema else 0.20
         filter_complex_list = []
         maps = []
 
         if bg_music and bg_music.exists():
             filter_complex_list.append(
-                f"[0:a]volume=1.0[voice];"
                 f"[1:a]volume={music_vol:.2f}[bg];"
-                f"[voice][bg]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+                f"[bg][0:a]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
+                f"[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
             )
             maps.extend(["-map", "[aout]"])
             audio_inputs = ["-i", str(bg_music)]

@@ -7,6 +7,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Set
 from PIL import Image, ImageDraw
+from .motion_canvas import classify_semantic_beat
 
 # Allow Pillow to downscale ultra-high resolution public domain photography (> 89 megapixels)
 Image.MAX_IMAGE_PIXELS = None
@@ -401,22 +402,58 @@ class MediaFetcher:
 
     @classmethod
     def extract_scene_beats(cls, scene: Dict[str, Any], total_duration: float, global_topic: str = "") -> List[Dict[str, Any]]:
-        """Decomposes a scene into multiple visual beats (every 3 to 6 seconds) with exact search queries."""
+        """
+        Decomposes a scene into multiple visual beats synced to spoken sentences,
+        and applies the Semantic Beat Classifier to route to MotionCanvas or Real Media.
+        """
         anchor = cls.extract_anchor_phrase(global_topic)
 
+        # 1. Native millisecond sentence boundary synchronization from Edge-TTS
+        sentence_timings = scene.get("sentence_timings", [])
+        if sentence_timings and isinstance(sentence_timings, list) and len(sentence_timings) >= 2:
+            beats = []
+            for st in sentence_timings:
+                s_text = st["text"]
+                classification = classify_semantic_beat(s_text, global_topic=global_topic)
+                beats.append({
+                    "phrase": s_text,
+                    "query": s_text,
+                    "duration": float(st["duration"]),
+                    **classification
+                })
+            curr_sum = sum(b["duration"] for b in beats)
+            if curr_sum > 0:
+                scale = total_duration / curr_sum
+                for b in beats:
+                    b["duration"] = round(b["duration"] * scale, 3)
+            return beats
+
+        # 2. Explicit beats defined in screenplay
         explicit_beats = scene.get("broll_beats", [])
         if explicit_beats and isinstance(explicit_beats, list) and len(explicit_beats) >= 2:
             dur_per_beat = total_duration / len(explicit_beats)
             beats = []
             for b in explicit_beats:
                 q = (b.get("search_query") or b.get("phrase") or scene.get("heading", "")).strip()
-                beats.append({"query": q, "duration": round(dur_per_beat, 3)})
+                classification = classify_semantic_beat(q, global_topic=global_topic)
+                beats.append({
+                    "phrase": q,
+                    "query": q,
+                    "duration": round(dur_per_beat, 3),
+                    **classification
+                })
             return beats
 
         narration = str(scene.get("narration") or scene.get("heading") or "").strip()
         if not narration:
             base_q = scene.get("search_query") or anchor or "documentary landscape"
-            return [{"query": base_q, "duration": total_duration}]
+            classification = classify_semantic_beat(base_q, global_topic=global_topic)
+            return [{
+                "phrase": base_q,
+                "query": base_q,
+                "duration": total_duration,
+                **classification
+            }]
 
         raw_sentences = [s.strip() for s in re.split(r'[\.\?!;]+', narration) if len(s.strip()) > 8]
         if len(raw_sentences) < 2:
@@ -424,7 +461,13 @@ class MediaFetcher:
 
         if len(raw_sentences) < 2:
             base_q = scene.get("search_query") or scene.get("heading") or anchor or "documentary landscape"
-            return [{"query": base_q, "duration": total_duration}]
+            classification = classify_semantic_beat(narration or base_q, global_topic=global_topic)
+            return [{
+                "phrase": narration or base_q,
+                "query": base_q,
+                "duration": total_duration,
+                **classification
+            }]
 
         total_words = sum(max(1, len(s.split())) for s in raw_sentences)
         stopwords = {
@@ -445,7 +488,13 @@ class MediaFetcher:
             else:
                 beat_q = f"{scene.get('heading', '')} {' '.join(w_list[:3])}"
 
-            beats.append({"query": beat_q.strip(), "duration": max(2.5, b_dur)})
+            classification = classify_semantic_beat(s, global_topic=global_topic)
+            beats.append({
+                "phrase": s,
+                "query": beat_q.strip(),
+                "duration": max(2.5, b_dur),
+                **classification
+            })
 
         current_sum = sum(b["duration"] for b in beats)
         if current_sum > 0:

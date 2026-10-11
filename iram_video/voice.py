@@ -2,6 +2,7 @@ import asyncio
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Any
+import edge_tts
 
 VOICE_MAP = {
     # English Voices
@@ -19,6 +20,37 @@ VOICE_MAP = {
     "tamil-female": "ta-IN-PallaviNeural",
     "tamil-male": "ta-IN-ValluvarNeural"
 }
+
+
+def extract_sentence_boundaries_from_words(word_timings: List[Dict[str, Any]], full_text: str) -> List[Dict[str, Any]]:
+    """Groups millisecond word boundary events into coherent sentence beats with exact start/end durations."""
+    if not word_timings:
+        return []
+    sentences = []
+    curr_words = []
+    for i, wt in enumerate(word_timings):
+        curr_words.append(wt)
+        is_last = (i == len(word_timings) - 1)
+        w_text = wt["word"]
+        has_punct = any(w_text.endswith(p) for p in [".", "!", "?", ";", "|", ":"])
+        has_pause = False
+        if not is_last:
+            next_start = word_timings[i + 1]["start"]
+            if next_start - wt["end"] >= 0.38:
+                has_pause = True
+        if has_punct or has_pause or is_last:
+            s_text = " ".join(w["word"] for w in curr_words)
+            s_start = curr_words[0]["start"]
+            s_end = curr_words[-1]["end"]
+            sentences.append({
+                "text": s_text,
+                "start": s_start,
+                "end": s_end,
+                "duration": round(max(0.8, s_end - s_start), 3)
+            })
+            curr_words = []
+    return sentences
+
 
 class VoiceSynthesizer:
     def __init__(self, voice_key: str = None, language: str = "en", rate: str = "+2%"):
@@ -51,19 +83,49 @@ class VoiceSynthesizer:
     async def _generate_single(self, scene: Dict[str, Any], output_dir: Path) -> Dict[str, Any]:
         sid = scene["id"]
         out_mp3 = output_dir / f"{sid}.mp3"
-        cmd = [
-            "edge-tts",
-            "--voice", self.voice,
-            f"--rate={self.rate}",
-            "--text", scene["narration"],
-            "--write-media", str(out_mp3)
-        ]
-        try:
-            proc = await asyncio.create_subprocess_exec(*cmd)
-            await proc.wait()
-        except Exception as e:
-            print(f"[Notice] edge-tts error for scene '{sid}': {e}")
+        word_timings = []
+        audio_bytes = bytearray()
 
+        try:
+            communicate = edge_tts.Communicate(
+                scene["narration"],
+                self.voice,
+                rate=self.rate,
+                boundary="WordBoundary"
+            )
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_bytes.extend(chunk["data"])
+                elif chunk["type"] == "WordBoundary":
+                    offset_sec = chunk["offset"] / 10_000_000.0
+                    dur_sec = chunk["duration"] / 10_000_000.0
+                    word_timings.append({
+                        "word": chunk["text"],
+                        "start": round(offset_sec, 3),
+                        "end": round(offset_sec + dur_sec, 3),
+                        "duration": round(dur_sec, 3)
+                    })
+            if audio_bytes:
+                out_mp3.write_bytes(audio_bytes)
+        except Exception as e:
+            print(f"[Notice] edge-tts stream error for scene '{sid}': {e}")
+
+        # CLI fallback if streaming yielded no bytes
+        if not out_mp3.exists() or out_mp3.stat().st_size == 0:
+            cmd = [
+                "edge-tts",
+                "--voice", self.voice,
+                f"--rate={self.rate}",
+                "--text", scene["narration"],
+                "--write-media", str(out_mp3)
+            ]
+            try:
+                proc = await asyncio.create_subprocess_exec(*cmd)
+                await proc.wait()
+            except Exception as e:
+                print(f"[Notice] edge-tts fallback error for scene '{sid}': {e}")
+
+        # Silent audio fallback if completely offline
         if not out_mp3.exists() or out_mp3.stat().st_size == 0:
             fallback_cmd = [
                 "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
@@ -74,6 +136,8 @@ class VoiceSynthesizer:
         dur = self.get_duration(out_mp3)
         scene["audio_file"] = str(out_mp3.resolve())
         scene["duration"] = dur
+        scene["word_timings"] = word_timings
+        scene["sentence_timings"] = extract_sentence_boundaries_from_words(word_timings, scene["narration"])
         return scene
 
     async def generate_all(self, scenes: List[Dict[str, Any]], output_dir: Path) -> List[Dict[str, Any]]:
@@ -86,21 +150,24 @@ class VoiceSynthesizer:
 
     def synthesize_line(self, text: str, output_file: Path) -> float:
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        cmd = [
-            "edge-tts",
-            "--voice", self.voice,
-            f"--rate={self.rate}",
-            "--text", text,
-            "--write-media", str(output_file)
-        ]
         try:
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            communicate = edge_tts.Communicate(text, self.voice, rate=self.rate)
+            communicate.save_sync(str(output_file))
         except Exception:
-            fallback_cmd = [
-                "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
-                "-t", "3.0", "-q:a", "9", str(output_file)
+            cmd = [
+                "edge-tts",
+                "--voice", self.voice,
+                f"--rate={self.rate}",
+                "--text", text,
+                "--write-media", str(output_file)
             ]
-            subprocess.run(fallback_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                fallback_cmd = [
+                    "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+                    "-t", "3.0", "-q:a", "9", str(output_file)
+                ]
+                subprocess.run(fallback_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         return self.get_duration(output_file)
-

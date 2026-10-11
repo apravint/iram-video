@@ -183,5 +183,86 @@ class TestCinemaFilmEngine(unittest.TestCase):
         self.assertTrue(MediaFetcher.is_noise_candidate("File:Tokyo Minibus.jpg", topic="Chennai Metro"))
         self.assertFalse(MediaFetcher.is_noise_candidate("File:Chennai Metro Phase2 trainset.jpg", topic="Chennai Metro"))
 
+    def test_semantic_beat_classifier(self):
+        from iram_video.motion_canvas import classify_semantic_beat
+
+        # Metric phrases
+        b_metric = classify_semantic_beat("சென்னை மெட்ரோ இரண்டாம் கட்டம் 116 கி.மீ தொலைவில் 118 நிலையங்களுடன் அமைகிறது.")
+        self.assertEqual(b_metric["beat_type"], "metric_card")
+        self.assertEqual(b_metric["metric_number"], 116.0)
+
+        # Route / Corridor phrases
+        b_route3 = classify_semantic_beat("பாதை 3 மாதவரம் முதல் சிப்காட் வரை அமைகிறது.")
+        self.assertEqual(b_route3["beat_type"], "route_map")
+        self.assertEqual(len(b_route3["stations"]), 7)
+
+        b_route4 = classify_semantic_beat("Corridor 4 connects Lighthouse to Poonamallee across 26.1 km.")
+        self.assertEqual(b_route4["beat_type"], "route_map")
+
+        # General real media phrases
+        b_real = classify_semantic_beat("ஓட்டுநர் இல்லாத நவீன ரயில்கள் சென்னை மக்களின் பயணத்தை எளிதாக்கும்.")
+        self.assertEqual(b_real["beat_type"], "real_media")
+
+    def test_motion_canvas_rendering(self):
+        from iram_video.motion_canvas import MotionCanvas, classify_semantic_beat
+        with tempfile.TemporaryDirectory() as td:
+            out_metric = Path(td) / "metric.mp4"
+            out_route = Path(td) / "route.mp4"
+
+            b_m = classify_semantic_beat("116 கி.மீ மற்றும் 118 நிலையங்கள்")
+            MotionCanvas.render_metric_card(b_m, out_metric, duration=1.0)
+            self.assertTrue(out_metric.exists())
+            self.assertTrue(out_metric.stat().st_size > 1000)
+
+            b_r = classify_semantic_beat("பாதை 3 மாதவரம் முதல் சிப்காட் வரை")
+            MotionCanvas.render_route_map(b_r, out_route, duration=1.0)
+            self.assertTrue(out_route.exists())
+            self.assertTrue(out_route.stat().st_size > 1000)
+
+    def test_sentence_boundary_extraction_from_words(self):
+        from iram_video.voice import extract_sentence_boundaries_from_words
+        sample_words = [
+            {"word": "வணக்கம்.", "start": 0.1, "end": 0.8, "duration": 0.7},
+            {"word": "இது", "start": 1.4, "end": 1.7, "duration": 0.3},
+            {"word": "மெட்ரோ.", "start": 1.8, "end": 2.4, "duration": 0.6}
+        ]
+        sentences = extract_sentence_boundaries_from_words(sample_words, "வணக்கம். இது மெட்ரோ.")
+        self.assertEqual(len(sentences), 2)
+        self.assertEqual(sentences[0]["text"], "வணக்கம்.")
+        self.assertEqual(sentences[1]["text"], "இது மெட்ரோ.")
+        self.assertAlmostEqual(sentences[0]["start"], 0.1)
+        self.assertAlmostEqual(sentences[1]["start"], 1.4)
+
+    def test_sidechain_ducking_filter_syntax(self):
+        import subprocess
+        fc = (
+            "[1:a]volume=0.28[bg];"
+            "[bg][0:a]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
+            "[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        )
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", "sine=frequency=1000:duration=1",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+            "-filter_complex", fc,
+            "-map", "[aout]",
+            "-f", "null", "-"
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0)
+
+    def test_smoothstep_zoompan_syntax(self):
+        import subprocess
+        d = 30
+        zp = f"zoompan=z='1.0+0.10*(3*pow(on/{d},2)-2*pow(on/{d},3))':d={d}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=640x360:fps=30"
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", "color=c=black:s=640x360:d=1",
+            "-vf", zp,
+            "-f", "null", "-"
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0)
+
 if __name__ == "__main__":
     unittest.main()

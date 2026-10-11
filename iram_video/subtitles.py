@@ -63,42 +63,78 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if not text:
                 continue
 
-            words = text.split()
-            if not words:
-                continue
+            word_timings = scene.get("word_timings", [])
+            if word_timings and len(word_timings) >= 1:
+                # Millisecond-accurate timing directly from Edge-TTS telemetry
+                chunk_size = 3 if len(word_timings) >= 6 else (2 if len(word_timings) >= 4 else len(word_timings))
+                chunks = []
+                for i in range(0, len(word_timings), chunk_size):
+                    chunks.append(word_timings[i:i + chunk_size])
 
-            # Split into punchy 2-4 word phrases
-            chunk_size = 3 if len(words) >= 6 else (2 if len(words) >= 4 else len(words))
-            chunks = []
-            for i in range(0, len(words), chunk_size):
-                chunks.append(words[i:i + chunk_size])
+                for c_idx, chunk in enumerate(chunks):
+                    c_start = scene_start + chunk[0]["start"]
+                    c_end = scene_start + chunk[-1]["end"]
+                    if c_idx < len(chunks) - 1:
+                        next_c_start = scene_start + chunks[c_idx + 1][0]["start"]
+                        c_end = min(c_end + 0.15, next_c_start)
 
-            chunk_duration = duration / max(1, len(chunks))
-
-            for c_idx, chunk in enumerate(chunks):
-                c_start = scene_start + (c_idx * chunk_duration)
-                c_end = c_start + chunk_duration
-                word_dur = chunk_duration / len(chunk)
-
-                # Micro-animate each word in this chunk
-                for w_idx, active_word in enumerate(chunk):
-                    w_start = c_start + (w_idx * word_dur)
-                    w_end = w_start + word_dur
-                    if w_idx == len(chunk) - 1:
-                        w_end = c_end
-
-                    styled_tokens = []
-                    for k, w in enumerate(chunk):
-                        if k == w_idx:
-                            # Active word: Highlighted & slightly scaled
-                            styled_tokens.append(f"{{{accent_color}\\fscx112\\fscy112}}{w.upper()}{{\\c&H00FFFFFF&\\fscx100\\fscy100}}")
+                    for w_idx, active_item in enumerate(chunk):
+                        w_start = scene_start + active_item["start"]
+                        w_end = scene_start + active_item["end"]
+                        if w_idx < len(chunk) - 1:
+                            w_end = min(w_end + 0.08, scene_start + chunk[w_idx + 1]["start"])
                         else:
-                            styled_tokens.append(w.upper())
+                            w_end = max(w_end, c_end)
 
-                    line_text = " ".join(styled_tokens)
-                    start_str = format_ass_time(w_start)
-                    end_str = format_ass_time(w_end)
-                    events.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{line_text}")
+                        styled_tokens = []
+                        for k, item in enumerate(chunk):
+                            w_word = item["word"].upper()
+                            if k == w_idx:
+                                styled_tokens.append(f"{{{accent_color}\\fscx112\\fscy112}}{w_word}{{\\c&H00FFFFFF&\\fscx100\\fscy100}}")
+                            else:
+                                styled_tokens.append(w_word)
+
+                        line_text = " ".join(styled_tokens)
+                        start_str = format_ass_time(w_start)
+                        end_str = format_ass_time(w_end)
+                        events.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{line_text}")
+            else:
+                words = text.split()
+                if not words:
+                    continue
+
+                # Split into punchy 2-4 word phrases
+                chunk_size = 3 if len(words) >= 6 else (2 if len(words) >= 4 else len(words))
+                chunks = []
+                for i in range(0, len(words), chunk_size):
+                    chunks.append(words[i:i + chunk_size])
+
+                chunk_duration = duration / max(1, len(chunks))
+
+                for c_idx, chunk in enumerate(chunks):
+                    c_start = scene_start + (c_idx * chunk_duration)
+                    c_end = c_start + chunk_duration
+                    word_dur = chunk_duration / len(chunk)
+
+                    # Micro-animate each word in this chunk
+                    for w_idx, active_word in enumerate(chunk):
+                        w_start = c_start + (w_idx * word_dur)
+                        w_end = w_start + word_dur
+                        if w_idx == len(chunk) - 1:
+                            w_end = c_end
+
+                        styled_tokens = []
+                        for k, w in enumerate(chunk):
+                            if k == w_idx:
+                                # Active word: Highlighted & slightly scaled
+                                styled_tokens.append(f"{{{accent_color}\\fscx112\\fscy112}}{w.upper()}{{\\c&H00FFFFFF&\\fscx100\\fscy100}}")
+                            else:
+                                styled_tokens.append(w.upper())
+
+                        line_text = " ".join(styled_tokens)
+                        start_str = format_ass_time(w_start)
+                        end_str = format_ass_time(w_end)
+                        events.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{line_text}")
 
         with open(out_ass_path, "w", encoding="utf-8") as f:
             f.write(header)

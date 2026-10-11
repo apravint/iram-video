@@ -6,9 +6,16 @@ from typing import List, Dict, Any, Optional
 from .b_roll import MediaFetcher
 from .audio_synth import synthesize_mood_track
 from .ai_video import AIVideoEngine
+from .motion_canvas import MotionCanvas, classify_semantic_beat
+from .subtitles import KineticSubtitleGenerator
 
 class RealVideoCompiler:
-    """Compiles realistic documentary-style YouTube videos with AI video models (Veo/Wan/Kling) or real B-roll footage and photography (no cyberpunk, no subtitles)."""
+    """
+    Compiles realistic documentary-style YouTube videos with AI video models (Veo/Wan/Kling),
+    curated verified 4K B-roll photography, and deterministic programmatic motion graphics
+    (route maps and animated metric cards).
+    Features dynamic audio sidechain ducking and smoothstep Ken Burns easing.
+    """
 
     def __init__(self, work_dir: Path, is_shorts: bool = False, provider: str = "auto", global_topic: str = ""):
         self.work_dir = work_dir
@@ -22,8 +29,43 @@ class RealVideoCompiler:
         self.w = 1080 if is_shorts else 1920
         self.h = 1920 if is_shorts else 1080
 
-    def _render_single_shot(self, query: str, duration: float, audio_file: Path, out_shot: Path, scene_idx: int) -> Path:
-        beat = {"query": query, "duration": duration}
+    def _render_single_shot(self, beat: Dict[str, Any], duration: float, audio_file: Path, out_shot: Path, scene_idx: int) -> Path:
+        beat_type = beat.get("beat_type", "real_media")
+        query = beat.get("query") or beat.get("phrase") or self.global_topic or "documentary landscape"
+
+        if beat_type == "metric_card":
+            tmp_video = self.shots_dir / f"tmp_single_{scene_idx:02d}.mp4"
+            MotionCanvas.render_metric_card(beat, tmp_video, duration=duration, is_shorts=self.is_shorts)
+            cmd_mux = [
+                "ffmpeg", "-y",
+                "-i", str(tmp_video),
+                "-i", str(audio_file),
+                "-map", "0:v",
+                "-map", "1:a",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-t", f"{duration:.3f}",
+                str(out_shot)
+            ]
+            subprocess.run(cmd_mux, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return out_shot
+        elif beat_type == "route_map":
+            tmp_video = self.shots_dir / f"tmp_single_{scene_idx:02d}.mp4"
+            MotionCanvas.render_route_map(beat, tmp_video, duration=duration, is_shorts=self.is_shorts)
+            cmd_mux = [
+                "ffmpeg", "-y",
+                "-i", str(tmp_video),
+                "-i", str(audio_file),
+                "-map", "0:v",
+                "-map", "1:a",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-t", f"{duration:.3f}",
+                str(out_shot)
+            ]
+            subprocess.run(cmd_mux, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return out_shot
+
         media_path = AIVideoEngine.fetch_or_generate_beat_media(
             beat, self.broll_dir, f"scene_{scene_idx:02d}", is_shorts=self.is_shorts, provider=self.provider, global_topic=self.global_topic
         )
@@ -60,10 +102,12 @@ class RealVideoCompiler:
 
             d_frames = int(duration * 30) + 30
             sw, sh = (int(self.w * 1.3), int(self.h * 1.3))
+            # Smoothstep easing zoompan
+            zp = f"zoompan=z='1.0+0.10*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
             fc = (
                 f"[0:v]scale={sw}:{sh}:force_original_aspect_ratio=increase,"
                 f"crop={sw}:{sh},"
-                f"zoompan=z='min(zoom+0.0004,1.08)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30,"
+                f"{zp},"
                 f"fade=t=in:st=0:d=0.35,fade=t=out:st={max(0.1, duration - 0.35):.2f}:d=0.35[v]"
             )
             cmd = [
@@ -88,18 +132,37 @@ class RealVideoCompiler:
         audio_file = Path(scene["audio_file"])
         out_shot = self.shots_dir / f"shot_{scene_idx:02d}.mp4"
 
-        # Extract rapid visual beats (cutting every 3.5 to 5.5 seconds for maximum engagement)
+        # Extract rapid visual beats (cutting on sentence boundaries with semantic classifier)
         beats = MediaFetcher.extract_scene_beats(scene, duration, global_topic=self.global_topic)
 
         if len(beats) <= 1:
-            query = scene.get("search_query") or scene.get("heading") or self.global_topic or "documentary landscape"
-            return self._render_single_shot(query, duration, audio_file, out_shot, scene_idx)
+            beat = beats[0] if beats else {"query": self.global_topic, "duration": duration}
+            return self._render_single_shot(beat, duration, audio_file, out_shot, scene_idx)
 
-        # Render each beat sub-clip with fresh real B-roll
+        # Render each beat sub-clip
         beat_clips = []
         for b_idx, beat in enumerate(beats):
             b_dur = float(beat["duration"])
             beat_clip_path = self.shots_dir / f"beat_{scene_idx:02d}_{b_idx:02d}.mp4"
+            beat_type = beat.get("beat_type", "real_media")
+
+            # Route 1: Programmatic Metric Card
+            if beat_type == "metric_card":
+                MotionCanvas.render_metric_card(
+                    beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts
+                )
+                beat_clips.append(beat_clip_path)
+                continue
+
+            # Route 2: Programmatic Route Map Blueprint
+            if beat_type == "route_map":
+                MotionCanvas.render_route_map(
+                    beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts
+                )
+                beat_clips.append(beat_clip_path)
+                continue
+
+            # Route 3: Real Curated 4K B-Roll / AI Generative Video
             media_path = AIVideoEngine.fetch_or_generate_beat_media(
                 beat, self.broll_dir, f"{scene_idx:02d}_{b_idx:02d}", is_shorts=self.is_shorts, provider=self.provider, global_topic=self.global_topic
             )
@@ -134,15 +197,17 @@ class RealVideoCompiler:
 
                 d_frames = int(b_dur * 30) + 15
                 sw, sh = (int(self.w * 1.25), int(self.h * 1.25))
+
+                # Non-linear camera easing curves (smoothstep polynomial: 3*t^2 - 2*t^3)
                 motion_mode = b_idx % 4
                 if motion_mode == 0:
-                    zp = f"zoompan=z='min(zoom+0.0006,1.12)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    zp = f"zoompan=z='1.0+0.10*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
                 elif motion_mode == 1:
-                    zp = f"zoompan=z='max(1.12-0.0006*on,1.0)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    zp = f"zoompan=z='1.10-0.10*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
                 elif motion_mode == 2:
-                    zp = f"zoompan=z=1.08:d={d_frames}:x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    zp = f"zoompan=z=1.08:d={d_frames}:x='(iw-iw/zoom)*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
                 else:
-                    zp = f"zoompan=z=1.08:d={d_frames}:x='(iw-iw/zoom)*(1-on/{d_frames})':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    zp = f"zoompan=z=1.08:d={d_frames}:x='(iw-iw/zoom)*(1-(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3)))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
 
                 fade_out_st = max(0.1, b_dur - 0.25)
                 fc = (
@@ -198,8 +263,19 @@ class RealVideoCompiler:
         subprocess.run(cmd_mux, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return out_shot
 
-    def compile_real_video(self, scenes: List[Dict[str, Any]], bg_music: Optional[Path], output_path: Path, global_topic: str = ""):
-        """Compiles full documentary video from real B-roll shots with ambient audio and no subtitles."""
+    def compile_real_video(
+        self,
+        scenes: List[Dict[str, Any]],
+        bg_music: Optional[Path],
+        output_path: Path,
+        global_topic: str = "",
+        burn_subtitles: bool = False,
+        language: str = "en"
+    ):
+        """
+        Compiles full documentary video from real B-roll shots and programmatic motion graphics
+        with dynamic audio sidechain compression ducking.
+        """
         if global_topic:
             self.global_topic = global_topic
         MediaFetcher.reset_session()
@@ -228,12 +304,21 @@ class RealVideoCompiler:
         ]
         subprocess.run(cmd_cat, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # Mix documentary background music if requested
+        # Optional kinetic subtitles filter
+        v_filters = []
+        if burn_subtitles:
+            ass_path = self.work_dir / "real_subtitles.ass"
+            KineticSubtitleGenerator.generate_ass(scenes, ass_path, is_shorts=self.is_shorts, language=language)
+            if ass_path.exists():
+                ass_escaped = str(ass_path).replace("\\", "/").replace(":", "\\:")
+                v_filters.append(f"ass={ass_escaped}")
+
+        # Mix documentary background music with Dynamic Audio Sidechain Ducking
         if bg_music and bg_music.exists():
             fc = (
-                "[0:a]volume=1.0[voice];"
-                "[1:a]volume=0.10[bg];"
-                "[voice][bg]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+                "[1:a]volume=0.28[bg];"
+                "[bg][0:a]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
+                "[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
             )
             cmd_mix = [
                 "ffmpeg", "-y",
@@ -242,19 +327,31 @@ class RealVideoCompiler:
                 "-filter_complex", fc,
                 "-map", "0:v",
                 "-map", "[aout]",
-                "-c:v", "copy",
+            ]
+            if v_filters:
+                cmd_mix.extend(["-vf", ",".join(v_filters), "-c:v", "libx264", "-preset", "veryfast"])
+            else:
+                cmd_mix.extend(["-c:v", "copy"])
+
+            cmd_mix.extend([
                 "-c:a", "aac",
                 "-b:a", "256k",
                 "-movflags", "+faststart",
                 str(output_path)
-            ]
+            ])
         else:
             cmd_mix = [
                 "ffmpeg", "-y",
-                "-i", str(raw_concat),
-                "-c", "copy",
+                "-i", str(raw_concat)
+            ]
+            if v_filters:
+                cmd_mix.extend(["-vf", ",".join(v_filters), "-c:v", "libx264", "-preset", "veryfast"])
+            else:
+                cmd_mix.extend(["-c:v", "copy"])
+
+            cmd_mix.extend([
                 "-movflags", "+faststart",
                 str(output_path)
-            ]
+            ])
 
         subprocess.run(cmd_mix, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

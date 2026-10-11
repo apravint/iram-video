@@ -336,11 +336,11 @@ class FilmCompiler:
         soundtrack_wav = self.work_dir / "film_soundtrack.wav"
         synthesize_mood_track("trailer", total_film_duration + 8.0, soundtrack_wav)
 
-        # Master Film Mix with dialogue ducking
+        # Master Film Mix with dynamic dialogue ducking
         fc = (
-            "[0:a]volume=1.0[dialogue];"
-            "[1:a]volume=0.22[score];"
-            "[dialogue][score]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+            "[1:a]volume=0.28[score];"
+            "[score][0:a]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
+            "[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
         )
         cmd_master = [
             "ffmpeg", "-y",
