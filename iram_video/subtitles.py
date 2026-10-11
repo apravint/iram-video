@@ -29,7 +29,7 @@ class KineticSubtitleGenerator:
         is_tamil = (language.lower() in ["ta", "tamil"])
         font_name = "Noto Sans Tamil" if is_tamil else "JetBrains Mono"
         font_size = 56 if is_shorts else 44
-        margin_v = 760 if is_shorts else 180
+        margin_v = 440 if is_shorts else 180
 
         # Primary Colors (AABBGGRR in ASS hex)
         # White text: &H00FFFFFF&, Glow Cyan: &H00FFFF00&, Vivid Gold: &H0000D7FF&

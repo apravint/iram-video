@@ -236,34 +236,112 @@ class SlideRenderer:
             sy += 30
 
         cards = scene.get("cards", [])
-        num_cards = max(1, min(3, len(cards)))
-        total_avail_h = 1380
-        gap = 30
-        card_h = (total_avail_h - (num_cards - 1) * gap) // num_cards
         card_w = 960
         start_y = 260
 
-        for i, card in enumerate(cards[:num_cards]):
-            y = start_y + i * (card_h + gap)
-            col = self.accent_color if i % 2 == 0 else self.sec_color
-            ib = self.draw_card_frame(img, (60, y, 60 + card_w, y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
+        if len(cards) <= 1:
+            # Single prominent card + Interactive Terminal Simulation Window
+            card = cards[0] if cards else {}
+            card_h = 400
+            col = self.accent_color
+            ib = self.draw_card_frame(img, (60, start_y, 60 + card_w, start_y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
             cdraw = ImageDraw.Draw(img)
-            
+
             badge = card.get("badge")
             by = ib[1]
             if badge:
                 fta_b, fen_b = get_fonts(16, bold=True)
-                cdraw.rectangle((ib[0], by, ib[0] + 160, by + 34), fill=(25, 38, 60), outline=col, width=1)
+                cdraw.rectangle((ib[0], by, ib[0] + 180, by + 34), fill=(25, 38, 60), outline=col, width=1)
                 draw_mixed_line(cdraw, ib[0] + 12, by + 6, badge, col, fta_b, fen_b)
                 by += 46
 
             fta_bullet, fen_bullet = get_fonts(18, bold=False)
-            for bullet in card.get("bullets", [])[:4]:
+            for bullet in card.get("bullets", [])[:3]:
                 wrapped = wrap_text(bullet, fta_bullet, fen_bullet, card_w - 40, cdraw)
                 for w in wrapped:
                     draw_mixed_line(cdraw, ib[0], by, f"⚡ {w}", (190, 215, 240), fta_bullet, fen_bullet)
                     by += 28
                 by += 10
+
+            # Terminal / Code Simulation Box in Lower-Middle Area
+            term_y = start_y + card_h + 35
+            term_h = 440
+            draw.rectangle([(60, term_y), (60 + card_w, term_y + term_h)], fill=(12, 16, 24), outline=(0, 255, 136), width=2)
+            draw.rectangle([(60, term_y), (60 + card_w, term_y + 44)], fill=(20, 28, 40))
+            draw.line([(60, term_y + 44), (60 + card_w, term_y + 44)], fill=(0, 255, 136), width=1)
+
+            # Window controls
+            draw.ellipse([(80, term_y + 14), (96, term_y + 30)], fill=(239, 68, 68))
+            draw.ellipse([(108, term_y + 14), (124, term_y + 30)], fill=(234, 179, 8))
+            draw.ellipse([(136, term_y + 14), (152, term_y + 30)], fill=(34, 197, 94))
+
+            fta_tt, fen_tt = get_fonts(15, bold=True)
+            draw_mixed_line(draw, 170, term_y + 12, "termux ~ bash (Android Linux)", (140, 165, 195), fta_tt, fen_tt)
+
+            # Realistic CLI commands based on scene
+            h_low = heading.lower()
+            if any(k in h_low for k in ["start", "intro", "mobile", "full", "linux"]):
+                c_lines = [
+                    ("$ termux-setup-storage", (0, 255, 136)),
+                    ("[✓] Storage access granted (/sdcard)", (130, 215, 170)),
+                    ("$ uname -m", (0, 255, 136)),
+                    ("aarch64 (Linux 5.15-android)", (190, 215, 240)),
+                    ("$ echo 'Linux on mobile is ready'", (0, 255, 136)),
+                    ("Linux on mobile is ready", (255, 255, 255))
+                ]
+            elif any(k in h_low for k in ["pack", "tool", "apt", "pkg", "install"]):
+                c_lines = [
+                    ("$ pkg update -y && pkg upgrade", (0, 255, 136)),
+                    ("[✓] 1,420 packages updated", (130, 215, 170)),
+                    ("$ pkg install python git openssh neovim", (0, 255, 136)),
+                    ("[✓] Installed Python 3.12, Git 2.44, Neovim", (130, 215, 170)),
+                    ("$ python -c \"print('Hello from Android')\"", (0, 255, 136)),
+                    ("Hello from Android", (255, 215, 0))
+                ]
+            else:
+                c_lines = [
+                    ("$ git clone https://github.com/app/server", (0, 255, 136)),
+                    ("$ python -m http.server 8080", (0, 255, 136)),
+                    ("[⚡] Serving HTTP on 0.0.0.0 port 8080...", (130, 215, 170)),
+                    ("$ ssh admin@production-cloud", (0, 255, 136)),
+                    ("Welcome to Ubuntu 26.04 LTS (GNU/Linux)", (190, 215, 240)),
+                    ("System load: 0.12, Memory: 64% used", (140, 165, 195))
+                ]
+
+            ty = term_y + 60
+            fta_cmd, fen_cmd = get_fonts(17, bold=False)
+            fta_cmd_b, fen_cmd_b = get_fonts(17, bold=True)
+            for cmd_text, cmd_col in c_lines:
+                f_use = fen_cmd_b if cmd_text.startswith("$") else fen_cmd
+                draw_mixed_line(draw, 85, ty, cmd_text, cmd_col, fta_cmd, f_use)
+                ty += 34
+        else:
+            num_cards = min(3, len(cards))
+            total_avail_h = 1000
+            gap = 25
+            card_h = (total_avail_h - (num_cards - 1) * gap) // num_cards
+
+            for i, card in enumerate(cards[:num_cards]):
+                y = start_y + i * (card_h + gap)
+                col = self.accent_color if i % 2 == 0 else self.sec_color
+                ib = self.draw_card_frame(img, (60, y, 60 + card_w, y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
+                cdraw = ImageDraw.Draw(img)
+
+                badge = card.get("badge")
+                by = ib[1]
+                if badge:
+                    fta_b, fen_b = get_fonts(16, bold=True)
+                    cdraw.rectangle((ib[0], by, ib[0] + 160, by + 34), fill=(25, 38, 60), outline=col, width=1)
+                    draw_mixed_line(cdraw, ib[0] + 12, by + 6, badge, col, fta_b, fen_b)
+                    by += 46
+
+                fta_bullet, fen_bullet = get_fonts(18, bold=False)
+                for bullet in card.get("bullets", [])[:4]:
+                    wrapped = wrap_text(bullet, fta_bullet, fen_bullet, card_w - 40, cdraw)
+                    for w in wrapped:
+                        draw_mixed_line(cdraw, ib[0], by, f"⚡ {w}", (190, 215, 240), fta_bullet, fen_bullet)
+                        by += 28
+                    by += 10
 
     # --- LANDSCAPE 16:9 METHODS ---
     def _render_pillars(self, img: Image.Image, cards: List[Dict[str, Any]]):
