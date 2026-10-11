@@ -27,7 +27,7 @@ For each scene, you provide:
        - "bullets": Array of bullet points (each 1-2 sentences, max 80 chars per bullet)
 5. "broll_beats": Array of 3 to 6 sequential visual beats matching each sentence of the narration:
    [
-     {"phrase": "the spoken sentence", "search_query": "3-5 word exact search keywords for real B-roll video/photo", "ai_prompt": "Cinematic 8k photorealistic video description for AI video generators (Veo/Wan/Kling) describing camera motion, lighting, and action"}
+     {"phrase": "the spoken sentence", "search_query": "3-5 word exact search keywords for real B-roll video/photo. ALWAYS anchor the search query with the specific primary entity/topic name (e.g. 'Chennai Metro elevated viaduct', 'Chennai Metro driverless train', 'Chennai Central metro station'). NEVER output isolated generic words like 'feeder', 'corridor', 'speed', 'tunnel'.", "ai_prompt": "Cinematic 8k photorealistic video description for AI video generators (Veo/Wan/Kling) describing camera motion, lighting, and action"}
    ]
 6. "narration": The EXACT spoken voiceover script for the narrator.
    - Natural, highly engaging, professional tone.

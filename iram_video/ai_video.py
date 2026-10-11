@@ -232,7 +232,8 @@ class AIVideoEngine:
         out_dir: Path,
         beat_id: str,
         is_shorts: bool = False,
-        provider: str = "auto"
+        provider: str = "auto",
+        global_topic: str = ""
     ) -> Path:
         """
         Main routing function that executes the multi-tier cascading fallback:
@@ -273,7 +274,7 @@ class AIVideoEngine:
                 return res
 
         # Tier 4: Public Domain Stock Archives (Wikimedia Commons & NASA HD Video/Photos)
-        stock_path = MediaFetcher.fetch_media_for_beat(query, out_dir, beat_id)
+        stock_path = MediaFetcher.fetch_media_for_beat(query, out_dir, beat_id, global_topic=global_topic)
         if stock_path.exists() and stock_path.stat().st_size > 5000:
             return stock_path
 

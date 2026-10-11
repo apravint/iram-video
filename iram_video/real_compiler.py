@@ -10,10 +10,11 @@ from .ai_video import AIVideoEngine
 class RealVideoCompiler:
     """Compiles realistic documentary-style YouTube videos with AI video models (Veo/Wan/Kling) or real B-roll footage and photography (no cyberpunk, no subtitles)."""
 
-    def __init__(self, work_dir: Path, is_shorts: bool = False, provider: str = "auto"):
+    def __init__(self, work_dir: Path, is_shorts: bool = False, provider: str = "auto", global_topic: str = ""):
         self.work_dir = work_dir
         self.is_shorts = is_shorts
         self.provider = provider
+        self.global_topic = global_topic
         self.broll_dir = work_dir / "broll_media"
         self.broll_dir.mkdir(parents=True, exist_ok=True)
         self.shots_dir = work_dir / "real_shots"
@@ -24,7 +25,7 @@ class RealVideoCompiler:
     def _render_single_shot(self, query: str, duration: float, audio_file: Path, out_shot: Path, scene_idx: int) -> Path:
         beat = {"query": query, "duration": duration}
         media_path = AIVideoEngine.fetch_or_generate_beat_media(
-            beat, self.broll_dir, f"scene_{scene_idx:02d}", is_shorts=self.is_shorts, provider=self.provider
+            beat, self.broll_dir, f"scene_{scene_idx:02d}", is_shorts=self.is_shorts, provider=self.provider, global_topic=self.global_topic
         )
         is_video = media_path.suffix.lower() in [".mp4", ".webm", ".mkv", ".mov"]
 
@@ -88,10 +89,10 @@ class RealVideoCompiler:
         out_shot = self.shots_dir / f"shot_{scene_idx:02d}.mp4"
 
         # Extract rapid visual beats (cutting every 3.5 to 5.5 seconds for maximum engagement)
-        beats = MediaFetcher.extract_scene_beats(scene, duration)
+        beats = MediaFetcher.extract_scene_beats(scene, duration, global_topic=self.global_topic)
 
         if len(beats) <= 1:
-            query = scene.get("search_query") or scene.get("heading") or "documentary landscape"
+            query = scene.get("search_query") or scene.get("heading") or self.global_topic or "documentary landscape"
             return self._render_single_shot(query, duration, audio_file, out_shot, scene_idx)
 
         # Render each beat sub-clip with fresh real B-roll
@@ -100,7 +101,7 @@ class RealVideoCompiler:
             b_dur = float(beat["duration"])
             beat_clip_path = self.shots_dir / f"beat_{scene_idx:02d}_{b_idx:02d}.mp4"
             media_path = AIVideoEngine.fetch_or_generate_beat_media(
-                beat, self.broll_dir, f"{scene_idx:02d}_{b_idx:02d}", is_shorts=self.is_shorts, provider=self.provider
+                beat, self.broll_dir, f"{scene_idx:02d}_{b_idx:02d}", is_shorts=self.is_shorts, provider=self.provider, global_topic=self.global_topic
             )
             is_video = media_path.suffix.lower() in [".webm", ".mp4", ".mkv", ".mov"]
 
@@ -197,8 +198,11 @@ class RealVideoCompiler:
         subprocess.run(cmd_mux, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return out_shot
 
-    def compile_real_video(self, scenes: List[Dict[str, Any]], bg_music: Optional[Path], output_path: Path):
+    def compile_real_video(self, scenes: List[Dict[str, Any]], bg_music: Optional[Path], output_path: Path, global_topic: str = ""):
         """Compiles full documentary video from real B-roll shots with ambient audio and no subtitles."""
+        if global_topic:
+            self.global_topic = global_topic
+        MediaFetcher.reset_session()
         shot_paths = []
         total_duration = 0.0
 

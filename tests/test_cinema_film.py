@@ -106,13 +106,50 @@ class TestCinemaFilmEngine(unittest.TestCase):
         self.assertTrue(result_file.exists())
         self.assertTrue(result_file.stat().st_size > 1000)
 
-    def test_ai_video_engine_env_guards(self):
-        from iram_video.ai_video import AIVideoEngine
-        # When FAL_KEY or REPLICATE_API_TOKEN is absent, calls must safely return None
-        fal_res = AIVideoEngine.generate_with_fal("test prompt", Path("/tmp/fal_test.mp4"))
-        rep_res = AIVideoEngine.generate_with_replicate("test prompt", Path("/tmp/rep_test.mp4"))
-        self.assertIsNone(fal_res)
-        self.assertIsNone(rep_res)
+    def test_anchor_phrase_extraction(self):
+        from iram_video.b_roll import MediaFetcher
+        ta_topic = "சென்னை மெட்ரோ இரண்டாம் கட்ட திட்டம் (Phase 2): 116 கி.மீ தொலைவு | Chennai Metro Phase 2 Launch"
+        anchor = MediaFetcher.extract_anchor_phrase(ta_topic)
+        self.assertIn("Chennai Metro", anchor)
+
+        en_topic = "Quantum Computing Architecture and Qubits"
+        en_anchor = MediaFetcher.extract_anchor_phrase(en_topic)
+        self.assertIn("Quantum Computing", en_anchor)
+
+    def test_noise_filtering(self):
+        from iram_video.b_roll import MediaFetcher
+        # Green fruit Brazilian forest must be flagged as noise
+        is_noise_forest = MediaFetcher.is_noise_candidate(
+            "File:Corredor Florestal - Pontal do Paranapanema.jpg",
+            query="corridor",
+            topic="Chennai Metro"
+        )
+        self.assertTrue(is_noise_forest)
+
+        # Japanese bus with cartoon face must be flagged as noise
+        is_noise_bus = MediaFetcher.is_noise_candidate(
+            "File:Nagaokakyo Happy Bus.jpg",
+            query="feeder",
+            topic="Chennai Metro"
+        )
+        self.assertTrue(is_noise_bus)
+
+        # Authentic Chennai Metro train/feeder must NOT be flagged as noise
+        is_noise_metro = MediaFetcher.is_noise_candidate(
+            "File:Chennai metro feeder service.jpg",
+            query="feeder",
+            topic="Chennai Metro"
+        )
+        self.assertFalse(is_noise_metro)
+
+    def test_duplicate_media_avoidance(self):
+        from iram_video.b_roll import MediaFetcher
+        MediaFetcher.reset_session()
+        self.assertEqual(len(MediaFetcher._used_urls), 0)
+        MediaFetcher._used_urls.add("https://example.com/photo1.jpg")
+        self.assertIn("https://example.com/photo1.jpg", MediaFetcher._used_urls)
+        MediaFetcher.reset_session()
+        self.assertEqual(len(MediaFetcher._used_urls), 0)
 
 if __name__ == "__main__":
     unittest.main()

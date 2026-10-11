@@ -314,10 +314,11 @@ def main():
 
         # 4 & 5. Video Sourcing & Compilation
         if is_real:
+            combined_topic = f"{args.prompt} | {video_title}"
             print(f"🎥 [4/5] Sourcing video footage ({generator_prov.upper()} generative AI + stock fallback)...")
-            real_compiler = RealVideoCompiler(work_dir, is_shorts=is_shorts, provider=generator_prov)
+            real_compiler = RealVideoCompiler(work_dir, is_shorts=is_shorts, provider=generator_prov, global_topic=combined_topic)
             print(f"⚙️  [5/5] Compiling master documentary video with acoustic score (NO subtitles)...")
-            real_compiler.compile_real_video(scenes, bg_music_wav, output_mp4)
+            real_compiler.compile_real_video(scenes, bg_music_wav, output_mp4, global_topic=combined_topic)
             print(f"🎉 MASTER REAL VIDEO GENERATED: {output_mp4}")
         else:
             # --- SLIDE/GRAPHICS VIDEO PIPELINE ---
