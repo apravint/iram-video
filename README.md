@@ -1,53 +1,103 @@
-# 🎬 IRAM Video: Universal Bilingual Prompt-to-Video AI Engine (English & தமிழ்)
+# 🎬 IRAM Video: Universal High-Quality Video & Film AI Engine (English & தமிழ்)
 
-An autonomous, prompt-driven video generation engine that transforms **any natural language prompt or technical topic in English or Tamil (தமிழ்)** into a broadcast-quality 1080p MP4 video, complete with a **high-CTR YouTube thumbnail** and **ready-to-paste metadata & chapters**.
+An autonomous, production-grade video generation engine that transforms **any natural language prompt, technical codebase, or screenplay into broadcast-quality 1080p MP4 videos, YouTube Shorts, cinema trailers, and animated short films**.
+
+[![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-27%20passed-brightgreen.svg)](tests/)
+[![Bilingual](https://img.shields.io/badge/languages-English%20%7C%20%E0%AE%A4%E0%AE%AE%E0%AE%BF%E0%AE%B4%E0%AF%8D-purple.svg)]()
 
 ---
 
-## 🏛️ Architecture & Stack
+## 🏛️ Comprehensive Architecture & Model Hub
 
 ```
-User Prompt (EN / தமிழ்) ──► Google Gemini 3.8 Flash (AI Creative Director)
-                                      │
-        ┌─────────────────────────────┼─────────────────────────────┐
-        ▼                             ▼                             ▼
-   Screenplay JSON             Edge Neural TTS               Pillow 1080p
-   (Scenes, Layouts)     (Aria / Pallavi / Valluvar)       (Noto Tamil / JetBrains)
-        │                             │                             │
-        └─────────────────────────────┼─────────────────────────────┘
-                                      ▼
-                             FFMPEG Master Engine
-                         (Fade Transitions + Ducking)
-                                      │
-                                      ▼
-                         🎬 Master 1080p MP4 Video
-                         🖼️ High-CTR YouTube Thumbnail (.png)
-                         📋 YouTube Chapters & Metadata (.txt)
+User Prompt / Repo / Screenplay 
+              │
+              ▼
+   🧠 Google Gemini 3.8 Flash (AI Creative Director & Dramatist)
+              │
+    ┌─────────┴────────────────────────┬────────────────────────┐
+    ▼                                  ▼                        ▼
+Screenplay & Shotcraft         Neural Voice Engine      Visual Synthesis Hub
+• 12 Cinematic Shot Recipes    • Studio Edge Neural     • Google Veo 3.1 / 2.0
+• Hollywood Tension Curves     • EBU R128 (-16 LUFS)    • Alibaba Wan 2.2 / 2.1
+• Multi-Character Continuity   • 80Hz Cut + 3.2kHz EQ   • Tencent HunyuanVideo
+                                                        • Zhipu CogVideoX
+                                                        • NVIDIA Sana Linear DiT
+                                                        • LivePortrait Avatars
+                                                        • Verified 4K B-Roll
+    │                                  │                        │
+    └──────────────────────────────────┼────────────────────────┘
+                                       ▼
+                       ⚙️ FFMPEG Master Compositor
+                    • Dynamic Sidechain Ducking (-18dB)
+                    • Retention Laser Progress Bar (9:16 Shorts)
+                    • Mukta Malar HarfBuzz Unicode Typography
+                    • 320kbps 48,000Hz Studio AAC Master
+                                       │
+                                       ▼
+                    🎬 Master 1080p Video / Shorts (.mp4)
+                    🖼️ High-CTR YouTube Thumbnail (.png)
+                    📋 Chapters, SEO & Viral Hooks (.txt)
 ```
+
+---
+
+## 🌟 Integrated Superpowers
+
+1. **Next-Gen Generative Video Model Hub**:
+   - **Google Veo 3.1 / 2.0**: Native generative video synthesis with cinematic lighting.
+   - **Alibaba Wan 2.2 / 2.1**: Advanced open-source 14B Diffusion Transformer video generation.
+   - **Tencent HunyuanVideo**: 13B open video DiT with cinema-grade motion fluidity.
+   - **Zhipu CogVideoX**: Spatial-temporal expert transformer video generator.
+   - **NVIDIA Sana**: Linear DiT for ultra-fast, high-resolution keyframe rendering.
+2. **Shotcraft Recipe Cards (`--recipe`)**:
+   - 12 production-ready cinematic shot recipes with camera and lens physics: `hero_reveal`, `macro_orbit`, `speed_ramp`, `isometric_exploded`, `dutch_angle_tension`, `terminal_glitch_scan`, `split_comparison`, `broll_whip_pan`.
+3. **Digital Human & LivePortrait Talking Avatars (`--avatar`)**:
+   - Turn any single portrait image into an audio-driven talking digital presenter with natural eye-blinking, head bobbing, and lip viseme synchronization. Composited as a floating lower-third Picture-in-Picture (PiP).
+4. **Project-to-Video 'Brag' Mode (`--brag`)**:
+   - Point `iram-video` at any local codebase or git repository. It inspects commit logs, README value propositions, and tech stacks to build an explosive 30-45s developer launch trailer.
+5. **Short Drama & Character Consistency Registry**:
+   - Maintains strict facial, attire, and persona consistency across multiple scenes or episodes with Hollywood dramatic tension curve scoring.
+6. **Viral Retention Progress Bar & HarfBuzz Typography**:
+   - Glowing retention laser bar for YouTube Shorts and TikTok.
+   - Bundled `Mukta Malar` font with HarfBuzz complex shaping (`shaping=1`) guaranteeing 100% accurate Tamil ligatures (`க்ஷ`, `ஸ்ரீ`).
+   - EBU R128 audio mastering (-16 LUFS) with 80Hz rumble filter and 3.2kHz vocal presence boost.
 
 ---
 
 ## 🚀 Quick Usage
 
-### 1. English Video Generation
+### 1. Developer Project Launch Video (`--brag`)
 ```bash
-# English video with default female voice (Aria):
-iram-video "Explain how quantum computing works"
-
-# English video with male tech narrator (Christopher) and Lo-Fi soundtrack:
-iram-video "What is Rust memory safety and ownership model" --voice christopher --music lofi
+# Ingest local repo and produce a 30s launch showcase:
+iram-video --brag /path/to/my-repo --shorts --music cyber
 ```
 
-### 2. Tamil Video Generation (தமிழ்)
+### 2. Shotcraft Cinematic Product & Tech Showcase
 ```bash
-# Automatically detects Tamil script from the prompt:
-iram-video "செயற்கை நுண்ணறிவு என்றால் என்ன?"
+# Cinema trailer using the 'hero_reveal' shotcraft recipe:
+iram-video "Next-Gen Quantum Computing Chip" --recipe hero_reveal --cinema --music trailer
+```
 
-# Or specify Tamil language explicitly:
-iram-video "Linux operating system basics" --lang ta --voice pallavi
+### 3. Digital Human Talking Presenter (`--avatar`)
+```bash
+# Composite an audio-driven talking avatar presenter in the corner:
+iram-video "What is Kubernetes Architecture" --avatar ./presenter.jpg --real
+```
 
-# Tamil video with male voice (Valluvar):
-iram-video "Python நிரலாக்க மொழி அறிமுகம்" --voice valluvar --music cyber
+### 4. Bilingual Tamil Documentary or Shorts (தமிழ்)
+```bash
+# Tamil documentary with EBU R128 mastered audio and retention progress bar:
+iram-video "சென்னை மெட்ரோ இரண்டாம் கட்ட விரிவாக்கம்" --lang ta --voice valluvar --shorts --subtitles
+```
+
+### 5. Multi-Model AI Video Generation
+```bash
+# Generate with specific model hubs:
+iram-video "A futuristic rover landing on Mars" --generator veo
+iram-video "Cyberpunk detective in rainy Neo-Tokyo" --generator wan2.2
+iram-video "Ancient temple at sunrise" --generator hunyuan
 ```
 
 ---
@@ -56,22 +106,20 @@ iram-video "Python நிரலாக்க மொழி அறிமுகம�
 
 | Argument | Description | Default |
 | :--- | :--- | :--- |
-| `prompt` | Topic, brief, or script in English or Tamil *(Positional, Required)* | — |
-| `-o, --output` | Target file path for the output `.mp4` video | `./<slug>.mp4` |
-| `--lang` | Language: `en` (English), `ta` (Tamil), or `auto` (auto-detect) | `auto` |
-| `--voice` | Voice persona (`aria`, `christopher`, `jenny`, `pallavi` [Tamil female], `valluvar` [Tamil male]) | `auto` |
-| `--scenes` | Target number of scenes to generate | `auto` |
-| `--music` | Mood of background soundtrack (`cyber`, `lofi`, `tech`, `ambient`, `none`) | `cyber` |
-| `--style` | Visual/editorial style hint (e.g. `dark mode`, `educational`, `minimal`) | `None` |
-| `--no-thumbnail`| Skip generating the companion YouTube thumbnail `.png` | `False` |
+| `prompt` | Topic, brief, or script in English or Tamil | — |
+| `--brag` | Inspect a local codebase/repo and build a developer launch showcase | `None` |
+| `--recipe` | Shotcraft cinematic recipe card (`hero_reveal`, `speed_ramp`, `macro_orbit`, etc.) | `None` |
+| `--avatar` | Path to portrait image for digital human talking avatar PiP | `None` |
+| `--generator` | Generative video backend (`auto`, `veo`, `wan2.2`, `hunyuan`, `cogvideo`, `sana`, `stock`) | `auto` |
+| `--shorts` | Compile as vertical 9:16 (1080x1920) with retention progress bar | `False` |
+| `--cinema` | Compile as 24 FPS 2.39:1 Hollywood trailer with 35mm film grain | `False` |
+| `--real` | Real documentary YouTube video with authentic stock & acoustic score | `False` |
+| `--subtitles` | Burn kinetic subtitles into the video | `False` |
+| `--subtitle-palette` | Subtitle color theme (`gold`, `hormozi`, `neon-cyan`, `fire-red`, `purple`, `white`) | `auto` |
+| `--tension` | Apply dramatic tension curve and pacing analysis | `False` |
+| `--serve` | Launch the browser Web Studio dashboard (default port 7860) | `False` |
 
 ---
 
-## 🌟 Key Features
-
-1. **Native Bilingual Support (English & தமிழ்)**: Full support for both English and Tamil typography, voice synthesis, and screenplay generation.
-2. **Zero Text Overlap Guaranteed**: Every slide uses dynamic word wrapping and computed bounding-box collision detection. Text never bleeds out of boxes or off the canvas.
-3. **Official Google GenAI Direction**: Powered by Google's official `gemini-3.8-flash` model via the `google-genai` SDK.
-4. **Studio Neural Voices**: High-clarity voices across languages (English `Aria`, `Christopher`; Tamil `Pallavi`, `Valluvar`).
-5. **High-CTR Thumbnail Included**: Automatically creates an eye-catching 1280x720 thumbnail with Tamil or English typography.
-6. **Ready-to-Paste Chapters & SEO**: Exports timed chapter markers, descriptions, and tags alongside the video.
+## 📄 License
+MIT License. Created for Creators, Developers, and Autonomous Media Agents.

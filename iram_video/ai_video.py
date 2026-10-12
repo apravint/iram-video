@@ -226,6 +226,143 @@ class AIVideoEngine:
         return None
 
     @classmethod
+    def generate_with_hunyuan(
+        cls,
+        prompt: str,
+        out_path: Path,
+        duration: float = 5.0,
+        is_shorts: bool = False
+    ) -> Optional[Path]:
+        """Attempts video generation using Tencent HunyuanVideo (13B Open DiT)."""
+        replicate_token = os.getenv("REPLICATE_API_TOKEN") or os.getenv("REPLICATE_API_KEY")
+        if not replicate_token:
+            return None
+        try:
+            import requests
+            endpoint = "https://api.replicate.com/v1/models/tencent/hunyuan-video/predictions"
+            aspect_ratio = "9:16" if is_shorts else "16:9"
+            payload = {
+                "input": {
+                    "prompt": f"Cinema grade masterpiece shot: {prompt}, 4k ultra realistic, natural motion",
+                    "aspect_ratio": aspect_ratio
+                }
+            }
+            headers = {"Authorization": f"Bearer {replicate_token}", "Content-Type": "application/json"}
+            print("   ⚡ [Tencent HunyuanVideo] Submitting request...")
+            resp = requests.post(endpoint, json=payload, headers=headers, timeout=15)
+            if resp.status_code in (200, 201):
+                poll_url = resp.json().get("urls", {}).get("get")
+                start_t = time.time()
+                while time.time() - start_t < 90:
+                    time.sleep(5)
+                    check = requests.get(poll_url, headers=headers, timeout=10)
+                    if check.status_code == 200:
+                        cdata = check.json()
+                        if cdata.get("status") == "succeeded":
+                            v_url = cdata.get("output")
+                            if isinstance(v_url, list): v_url = v_url[0]
+                            if v_url:
+                                v_resp = requests.get(v_url, timeout=30)
+                                if v_resp.status_code == 200:
+                                    with open(out_path, "wb") as f: f.write(v_resp.content)
+                                    print(f"   ✓ [Tencent HunyuanVideo] Generated video: {out_path.name}")
+                                    return out_path
+                        elif cdata.get("status") in ("failed", "canceled"):
+                            break
+        except Exception as e:
+            print(f"   ⚠️ [HunyuanVideo Error] {e}")
+        return None
+
+    @classmethod
+    def generate_with_cogvideo(
+        cls,
+        prompt: str,
+        out_path: Path,
+        duration: float = 5.0,
+        is_shorts: bool = False
+    ) -> Optional[Path]:
+        """Attempts video generation using Zhipu CogVideoX (5B Open Model)."""
+        replicate_token = os.getenv("REPLICATE_API_TOKEN") or os.getenv("REPLICATE_API_KEY")
+        if not replicate_token:
+            return None
+        try:
+            import requests
+            endpoint = "https://api.replicate.com/v1/models/thudm/cogvideox-5b/predictions"
+            payload = {
+                "input": {
+                    "prompt": f"Masterpiece cinematic capture: {prompt}, high motion fluidity, 8k",
+                    "duration": 5
+                }
+            }
+            headers = {"Authorization": f"Bearer {replicate_token}", "Content-Type": "application/json"}
+            print("   ⚡ [Zhipu CogVideoX] Submitting request...")
+            resp = requests.post(endpoint, json=payload, headers=headers, timeout=15)
+            if resp.status_code in (200, 201):
+                poll_url = resp.json().get("urls", {}).get("get")
+                start_t = time.time()
+                while time.time() - start_t < 90:
+                    time.sleep(5)
+                    check = requests.get(poll_url, headers=headers, timeout=10)
+                    if check.status_code == 200:
+                        cdata = check.json()
+                        if cdata.get("status") == "succeeded":
+                            v_url = cdata.get("output")
+                            if isinstance(v_url, list): v_url = v_url[0]
+                            if v_url:
+                                v_resp = requests.get(v_url, timeout=30)
+                                if v_resp.status_code == 200:
+                                    with open(out_path, "wb") as f: f.write(v_resp.content)
+                                    print(f"   ✓ [Zhipu CogVideoX] Generated video: {out_path.name}")
+                                    return out_path
+                        elif cdata.get("status") in ("failed", "canceled"):
+                            break
+        except Exception as e:
+            print(f"   ⚠️ [CogVideoX Error] {e}")
+        return None
+
+    @classmethod
+    def generate_keyframe_with_sana(
+        cls,
+        prompt: str,
+        out_path: Path,
+        is_shorts: bool = False
+    ) -> Optional[Path]:
+        """Attempts ultra-fast high-res keyframe synthesis using NVIDIA Sana linear DiT."""
+        fal_key = os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY")
+        if not fal_key:
+            return None
+        try:
+            import requests
+            endpoint = "https://queue.fal.run/fal-ai/sana"
+            image_size = "portrait_16_9" if is_shorts else "landscape_16_9"
+            payload = {
+                "prompt": f"Masterpiece cinematic 4k photo: {prompt}, ultra detailed, photorealistic",
+                "image_size": image_size
+            }
+            headers = {"Authorization": f"Key {fal_key}", "Content-Type": "application/json"}
+            print("   ⚡ [NVIDIA Sana DiT] Generating keyframe (<1s)...")
+            resp = requests.post(endpoint, json=payload, headers=headers, timeout=15)
+            if resp.status_code in (200, 201, 202):
+                data = resp.json()
+                s_url = data.get("status_url") or data.get("response_url")
+                start_t = time.time()
+                while time.time() - start_t < 30:
+                    time.sleep(2)
+                    check = requests.get(s_url, headers=headers, timeout=10)
+                    if check.status_code == 200:
+                        cdata = check.json()
+                        img_url = cdata.get("images", [{}])[0].get("url")
+                        if img_url:
+                            i_resp = requests.get(img_url, timeout=20)
+                            if i_resp.status_code == 200:
+                                with open(out_path, "wb") as f: f.write(i_resp.content)
+                                print(f"   ✓ [NVIDIA Sana DiT] Keyframe ready: {out_path.name}")
+                                return out_path
+        except Exception as e:
+            print(f"   ⚠️ [NVIDIA Sana Error] {e}")
+        return None
+
+    @classmethod
     def fetch_or_generate_beat_media(
         cls,
         beat: Dict[str, Any],
@@ -237,7 +374,7 @@ class AIVideoEngine:
     ) -> Path:
         """
         Main routing function that executes the multi-tier cascading fallback:
-        Google Veo -> Fal.ai -> Replicate -> Wikimedia/NASA Stock Archives -> Motion Canvas
+        Google Veo -> Wan 2.2/2.1 -> HunyuanVideo -> CogVideoX -> Sana Keyframe -> Stock -> Motion Canvas
         """
         out_dir.mkdir(parents=True, exist_ok=True)
         query = beat.get("query") or beat.get("search_query") or "documentary scene"
@@ -253,32 +390,51 @@ class AIVideoEngine:
 
         prov = provider.lower().strip()
 
-        # Tier 1: Google Veo
+        # Tier 1: Google Veo 3.1 / 2.0
         if prov in ("auto", "veo", "google"):
             res = cls.generate_with_google_veo(ai_prompt, target_mp4, duration, is_shorts)
             if res:
                 return res
             if prov in ("veo", "google"):
-                print("   🔄 [Veo fallback] Falling back to secondary providers...")
+                print("   🔄 [Veo fallback] Falling back to secondary generative providers...")
 
-        # Tier 2: Fal.ai Wan 2.1 / Kling / Luma
-        if prov in ("auto", "fal", "wan", "kling"):
+        # Tier 2: Alibaba Wan 2.2 / 2.1 via Fal.ai or Replicate
+        if prov in ("auto", "fal", "wan", "wan2", "wan2.1", "wan2.2", "kling"):
             res = cls.generate_with_fal(ai_prompt, target_mp4, duration, is_shorts)
             if res:
                 return res
 
-        # Tier 3: Replicate Wan 2.1 / Minimax
+        # Tier 3: Tencent HunyuanVideo (13B)
+        if prov in ("auto", "hunyuan", "hunyuanvideo"):
+            res = cls.generate_with_hunyuan(ai_prompt, target_mp4, duration, is_shorts)
+            if res:
+                return res
+
+        # Tier 4: Zhipu CogVideoX (5B)
+        if prov in ("auto", "cogvideo", "cogvideox"):
+            res = cls.generate_with_cogvideo(ai_prompt, target_mp4, duration, is_shorts)
+            if res:
+                return res
+
+        # Tier 5: Replicate Wan 2.1 / Minimax Hailuo
         if prov in ("auto", "replicate"):
             res = cls.generate_with_replicate(ai_prompt, target_mp4, duration, is_shorts)
             if res:
                 return res
 
-        # Tier 4: Public Domain Stock Archives (Wikimedia Commons & NASA HD Video/Photos)
+        # Tier 6: NVIDIA Sana Ultra-Fast Keyframe DiT
+        if prov in ("sana", "nvlabs"):
+            target_keyframe = out_dir / f"beat_{beat_id}_sana.jpg"
+            res_img = cls.generate_keyframe_with_sana(ai_prompt, target_keyframe, is_shorts)
+            if res_img:
+                return res_img
+
+        # Tier 7: Public Domain Stock Archives (Wikimedia Commons & NASA HD Video/Photos)
         stock_path = MediaFetcher.fetch_media_for_beat(query, out_dir, beat_id, global_topic=global_topic)
         if stock_path.exists() and stock_path.stat().st_size > 5000:
             return stock_path
 
-        # Tier 5: Documentary Motion Canvas Fallback
+        # Tier 8: Documentary Motion Canvas Fallback
         fallback_img = out_dir / f"beat_{beat_id}.jpg"
         if not fallback_img.exists():
             MediaFetcher.create_clean_documentary_frame(query, fallback_img)

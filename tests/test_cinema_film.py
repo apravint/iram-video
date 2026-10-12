@@ -324,5 +324,45 @@ class TestCinemaFilmEngine(unittest.TestCase):
         self.assertTrue(font_file.exists())
         self.assertTrue(font_file.stat().st_size > 100000)
 
+    def test_shotcraft_recipes(self):
+        from iram_video.shotcraft import SHOT_RECIPES, get_shot_recipe, build_recipe_filter
+        self.assertIn("hero_reveal", SHOT_RECIPES)
+        self.assertIn("speed_ramp", SHOT_RECIPES)
+        self.assertIn("macro_orbit", SHOT_RECIPES)
+        recipe = get_shot_recipe("hero_reveal")
+        self.assertIn("lens", recipe)
+        f_str = build_recipe_filter("hero_reveal", frames=30, w=1920, h=1080, fps=30)
+        self.assertIn("zoompan", f_str)
+
+    def test_brag_harvester(self):
+        from iram_video.brag import BragHarvester, ViralHookGenerator
+        from pathlib import Path
+        repo_dir = Path(__file__).parent.parent
+        info = BragHarvester.inspect_repository(repo_dir)
+        self.assertIn("name", info)
+        self.assertIn("Python", info.get("tech_stack", []))
+        prompt = BragHarvester.craft_launch_prompt(info)
+        self.assertTrue(len(prompt) > 30)
+        hooks = ViralHookGenerator.generate_variants("Distributed Consensus")
+        self.assertEqual(len(hooks), 3)
+
+    def test_drama_and_character_consistency(self):
+        from iram_video.drama import CharacterAnchorRegistry, DramaTensionCurve
+        registry = CharacterAnchorRegistry()
+        char = registry.register_character(
+            "Maya",
+            role="Cyber Detective",
+            appearance="Silver hair with cybernetic neon blue eye",
+            wardrobe="Black carbon-fiber trenchcoat"
+        )
+        self.assertEqual(char["name"], "Maya")
+        anchor = registry.get_prompt_anchor("Maya")
+        self.assertIn("Silver hair", anchor)
+
+        scenes = [{"id": f"sc_{i}", "heading": f"Scene {i}"} for i in range(5)]
+        annotated = DramaTensionCurve.calculate_tension_curve(scenes)
+        self.assertEqual(len(annotated), 5)
+        self.assertTrue(annotated[3]["tension_score"] >= annotated[0]["tension_score"])
+
 if __name__ == "__main__":
     unittest.main()

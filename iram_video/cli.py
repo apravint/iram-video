@@ -16,6 +16,10 @@ from .film_director import FilmDirector
 from .film_compiler import FilmCompiler
 from .real_compiler import RealVideoCompiler
 from .server import start_server
+from .shotcraft import SHOT_RECIPES, get_shot_recipe
+from .avatar import AvatarEngine
+from .brag import BragHarvester, ViralHookGenerator
+from .drama import CharacterAnchorRegistry, DramaTensionCurve
 
 def slugify(text: str) -> str:
     clean = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip().lower()
@@ -78,16 +82,33 @@ def main():
     parser.add_argument("--music", default="auto", choices=["auto", "documentary", "acoustic", "lofi", "tech", "ambient", "trailer", "cinematic", "cyber", "none"], help="Background music mood (default: documentary for real/youtube, cyber for tech, trailer for cinema)")
     parser.add_argument("--style", default=None, help="Style hint for the director (e.g. 'documentary', 'realistic', 'vox style', 'educational')")
     parser.add_argument("--no-thumbnail", action="store_true", help="Skip thumbnail generation")
-    parser.add_argument("--generator", default="auto", choices=["auto", "veo", "fal", "wan", "replicate", "kling", "stock"], help="Video generator backend with cascading fallback: 'auto' (Veo -> Fal -> Replicate -> Stock), 'veo', 'wan', 'stock'")
+    parser.add_argument("--generator", default="auto", choices=["auto", "veo", "wan", "wan2", "wan2.1", "wan2.2", "hunyuan", "cogvideo", "sana", "fal", "replicate", "kling", "stock"], help="Video generator model hub: 'auto', 'veo' (Google), 'wan'/'wan2.2' (Alibaba), 'hunyuan' (Tencent 13B), 'cogvideo' (Zhipu 5B), 'sana' (NVIDIA Linear DiT), 'stock'")
     parser.add_argument("--veo", dest="generator_veo", action="store_true", help="Prioritize Google Veo 3.1 / 2.0 generative video synthesis")
     parser.add_argument("--ai-video", dest="ai_video", action="store_true", help="Enable AI generative video synthesis with automatic multi-tier fallback")
     parser.add_argument("--subtitle-palette", default="auto", choices=["auto", "gold", "hormozi", "neon-cyan", "neon-green", "fire-red", "purple", "white"], help="Subtitle color palette ('gold', 'hormozi', 'neon-cyan', 'neon-green', 'fire-red', 'purple', 'white')")
+    parser.add_argument("--recipe", choices=list(SHOT_RECIPES.keys()), default=None, help="Cinematic shotcraft recipe card (e.g. 'hero_reveal', 'macro_orbit', 'speed_ramp', 'isometric_exploded')")
+    parser.add_argument("--brag", default=None, help="Repository-to-video mode: auto-inspect a codebase/git repository and craft a developer launch showcase")
+    parser.add_argument("--avatar", default=None, help="Digital human talking avatar mode: pass a portrait image to composite talking presenter")
+    parser.add_argument("--tension", action="store_true", help="Apply drama tension curve analysis and dramatic beat scoring")
 
     args = parser.parse_args()
 
     if args.serve or (len(sys.argv) > 1 and sys.argv[1] == "serve"):
         start_server(args.port)
         return
+
+    # Ingest from repository in Brag mode
+    if args.brag:
+        repo_dir = Path(args.brag).resolve()
+        if not repo_dir.exists():
+            print(f"❌ Brag repository path not found: {repo_dir}")
+            sys.exit(1)
+        brag_info = BragHarvester.inspect_repository(repo_dir)
+        args.prompt = BragHarvester.craft_launch_prompt(brag_info)
+        args.style = "High-energy developer launch showcase with code terminal simulation and architecture cards"
+        if not args.output:
+            args.output = f"./{repo_dir.name}_launch_showcase.mp4"
+        print(f"🚀 [BRAG LAUNCHPAD] Ingested repository \"{brag_info['name']}\" ({', '.join(brag_info.get('tech_stack', []))})")
 
     # Ingest from JSON document if provided
     if args.from_json:
@@ -101,6 +122,12 @@ def main():
         if not args.style:
             args.style = j_style
         print(f"📄 [JSON INGESTION] Loaded blueprint: \"{json_file.name}\"")
+
+    # Apply Shotcraft recipe card if specified
+    if args.recipe:
+        recipe_data = get_shot_recipe(args.recipe)
+        args.prompt = f"{args.prompt} Shotcraft Camera Direction: {recipe_data['name']} ({recipe_data['description']})."
+        print(f"🎬 [SHOTCRAFT RECIPE] Applied: \"{recipe_data['name']}\" ({recipe_data['lens']}, {recipe_data['lighting']})")
 
     if not args.prompt:
         parser.print_help()
@@ -337,6 +364,34 @@ def main():
             compiler = VideoCompiler(work_dir, is_cinema=is_cinema, is_shorts=is_shorts, character=character)
             compiler.compile(scenes, slide_paths, bg_music_wav, output_mp4, language=lang, burn_subtitles=burn_subtitles, palette_key=args.subtitle_palette)
             print(f"🎉 MASTER VIDEO GENERATED: {output_mp4}")
+
+        # Digital Human Talking Avatar Overlay (LivePortrait / Duix-Avatar)
+        if args.avatar:
+            avatar_path = Path(args.avatar).resolve()
+            if avatar_path.exists():
+                print(f"👤 [DIGITAL HUMAN] Compositing talking avatar presenter from '{avatar_path.name}'...")
+                avatar_tmp_video = work_dir / "avatar_clip.mp4"
+                composite_output = work_dir / "composite_with_avatar.mp4"
+                primary_audio = scenes[0].get("audio_file") or (work_dir / "audio" / f"{scenes[0]['id']}.mp3")
+                if primary_audio and Path(primary_audio).exists():
+                    AvatarEngine.create_talking_avatar_video(
+                        avatar_path,
+                        Path(primary_audio),
+                        avatar_tmp_video,
+                        duration=total_duration,
+                        width=380,
+                        height=380
+                    )
+                    AvatarEngine.overlay_presenter_pip(
+                        output_mp4,
+                        avatar_tmp_video,
+                        composite_output,
+                        position="bottom_right"
+                    )
+                    if composite_output.exists() and composite_output.stat().st_size > 10000:
+                        import shutil
+                        shutil.move(str(composite_output), str(output_mp4))
+                        print(f"✓ [DIGITAL HUMAN] Avatar presenter successfully composited onto master video")
 
         # 6. Thumbnail Generation
         if not args.no_thumbnail:
