@@ -81,6 +81,7 @@ def main():
     parser.add_argument("--generator", default="auto", choices=["auto", "veo", "fal", "wan", "replicate", "kling", "stock"], help="Video generator backend with cascading fallback: 'auto' (Veo -> Fal -> Replicate -> Stock), 'veo', 'wan', 'stock'")
     parser.add_argument("--veo", dest="generator_veo", action="store_true", help="Prioritize Google Veo 3.1 / 2.0 generative video synthesis")
     parser.add_argument("--ai-video", dest="ai_video", action="store_true", help="Enable AI generative video synthesis with automatic multi-tier fallback")
+    parser.add_argument("--subtitle-palette", default="auto", choices=["auto", "gold", "hormozi", "neon-cyan", "neon-green", "fire-red", "purple", "white"], help="Subtitle color palette ('gold', 'hormozi', 'neon-cyan', 'neon-green', 'fire-red', 'purple', 'white')")
 
     args = parser.parse_args()
 
@@ -317,9 +318,9 @@ def main():
             combined_topic = f"{args.prompt} | {video_title}"
             print(f"🎥 [4/5] Sourcing video footage ({generator_prov.upper()} generative AI + stock fallback)...")
             real_compiler = RealVideoCompiler(work_dir, is_shorts=is_shorts, provider=generator_prov, global_topic=combined_topic)
-            sub_status = "with subtitles" if burn_subtitles else "no subtitles"
+            sub_status = f"with subtitles [{args.subtitle_palette}]" if burn_subtitles else "no subtitles"
             print(f"⚙️  [5/5] Compiling master documentary video with acoustic score ({sub_status})...")
-            real_compiler.compile_real_video(scenes, bg_music_wav, output_mp4, global_topic=combined_topic, burn_subtitles=burn_subtitles, language=lang)
+            real_compiler.compile_real_video(scenes, bg_music_wav, output_mp4, global_topic=combined_topic, burn_subtitles=burn_subtitles, language=lang, palette_key=args.subtitle_palette)
             print(f"🎉 MASTER REAL VIDEO GENERATED: {output_mp4}")
         else:
             # --- SLIDE/GRAPHICS VIDEO PIPELINE ---
@@ -334,7 +335,7 @@ def main():
 
             print(f"⚙️  [5/5] Compiling master {dim_str} MP4 with FFMPEG...")
             compiler = VideoCompiler(work_dir, is_cinema=is_cinema, is_shorts=is_shorts, character=character)
-            compiler.compile(scenes, slide_paths, bg_music_wav, output_mp4, language=lang, burn_subtitles=burn_subtitles)
+            compiler.compile(scenes, slide_paths, bg_music_wav, output_mp4, language=lang, burn_subtitles=burn_subtitles, palette_key=args.subtitle_palette)
             print(f"🎉 MASTER VIDEO GENERATED: {output_mp4}")
 
         # 6. Thumbnail Generation

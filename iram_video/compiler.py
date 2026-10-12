@@ -138,7 +138,7 @@ class VideoCompiler:
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return out_clip
 
-    def compile(self, scenes: List[Dict[str, Any]], slide_paths: List[Path], bg_music: Path, final_output: Path, language: str = "en", burn_subtitles: bool = True):
+    def compile(self, scenes: List[Dict[str, Any]], slide_paths: List[Path], bg_music: Path, final_output: Path, language: str = "en", burn_subtitles: bool = True, palette_key: str = "auto"):
         clip_paths = []
         for scene, slide in zip(scenes, slide_paths):
             c = self.render_clip(scene, slide)
@@ -166,32 +166,41 @@ class VideoCompiler:
         # Prepare Post-Filters: Kinetic Subtitles & Retention Progress Bar
         v_filters = []
         if self.is_shorts:
-            # 1. Shorts retention progress bar (track + glowing laser fill)
-            v_filters.append("drawbox=x=0:y=1890:w=1080:h=12:color=0x111111@0.6:t=fill")
-            v_filters.append(f"drawbox=x=0:y=1890:w='min(1080,1080*(t/{max(0.1, total_duration):.2f}))':h=12:color=0x00E5FF@0.95:t=fill")
+            # 1. Shorts retention progress bar (14px track + glowing cyan fill along bottom)
+            v_filters.append("drawbox=x=0:y=1906:w=iw:h=14:color=black@0.45:t=fill")
+            v_filters.append(f"drawbox=x=0:y=1906:w='min(iw,iw*(t/{max(0.1, total_duration):.2f}))':h=14:color=0x00E5FF@0.95:t=fill")
 
         if burn_subtitles:
             ass_path = self.work_dir / "kinetic_subtitles.ass"
-            KineticSubtitleGenerator.generate_ass(scenes, ass_path, is_shorts=self.is_shorts, language=language)
+            KineticSubtitleGenerator.generate_ass(scenes, ass_path, is_shorts=self.is_shorts, language=language, palette_key=palette_key)
             if ass_path.exists():
                 ass_escaped = str(ass_path).replace("\\", "/").replace(":", "\\:")
-                v_filters.append(f"ass={ass_escaped}")
+                fonts_dir = Path(__file__).parent.parent / "assets" / "fonts"
+                if fonts_dir.exists():
+                    fonts_dir_escaped = str(fonts_dir).replace("\\", "/").replace(":", "\\:")
+                    v_filters.append(f"ass=filename={ass_escaped}:fontsdir={fonts_dir_escaped}:shaping=1")
+                else:
+                    v_filters.append(f"ass={ass_escaped}")
 
-        # Mix background audio with dynamic sidechain ducking
-        music_vol = 0.28 if self.is_cinema else 0.20
+        # Broadcast Studio Audio Mastering (EBU R128 + Vocal Presence EQ + BGM Low-pass Ducking)
+        music_vol = 0.22 if self.is_cinema else 0.16
         filter_complex_list = []
         maps = []
 
         if bg_music and bg_music.exists():
             filter_complex_list.append(
-                f"[1:a]volume={music_vol:.2f}[bg];"
-                f"[bg][0:a]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
-                f"[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+                f"[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[voice_master];"
+                f"[1:a]lowpass=f=4000,volume={music_vol:.2f}[bg_clean];"
+                f"[bg_clean][voice_master]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
+                f"[voice_master][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
             )
             maps.extend(["-map", "[aout]"])
             audio_inputs = ["-i", str(bg_music)]
         else:
-            maps.extend(["-map", "0:a?"])
+            filter_complex_list.append(
+                "[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[aout]"
+            )
+            maps.extend(["-map", "[aout]"])
             audio_inputs = []
 
         cmd_mix = [
@@ -220,7 +229,8 @@ class VideoCompiler:
         cmd_mix.extend([
             *maps,
             "-c:a", "aac",
-            "-b:a", "256k",
+            "-b:a", "320k",
+            "-ar", "48000",
             "-movflags", "+faststart",
             str(final_output)
         ])

@@ -58,7 +58,7 @@ class TestCinemaFilmEngine(unittest.TestCase):
             content = ass_out.read_text(encoding="utf-8")
             self.assertIn("[Script Info]", content)
             self.assertIn("Dialogue: 0,", content)
-            self.assertIn("Noto Sans Tamil", content)
+            self.assertTrue("Mukta Malar" in content or "Noto Sans Tamil" in content)
 
     def test_json_ingestion(self):
         from iram_video.cli import load_prompt_from_json
@@ -262,7 +262,67 @@ class TestCinemaFilmEngine(unittest.TestCase):
             "-f", "null", "-"
         ]
         res = subprocess.run(cmd, capture_output=True, text=True)
+    def test_ebu_r128_broadcast_mastering_syntax(self):
+        import subprocess
+        fc = (
+            "[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[voice_master];"
+            "[1:a]lowpass=f=4000,volume=0.20[bg_clean];"
+            "[bg_clean][voice_master]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
+            "[voice_master][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        )
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", "sine=frequency=1000:duration=1",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+            "-filter_complex", fc,
+            "-map", "[aout]",
+            "-f", "null", "-"
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(res.returncode, 0)
+
+    def test_retention_progress_bar_syntax(self):
+        import subprocess
+        vf = (
+            "drawbox=x=0:y=1906:w=iw:h=14:color=black@0.45:t=fill,"
+            "drawbox=x=0:y=1906:w='min(iw,iw*(t/5.0))':h=14:color=0x00E5FF@0.95:t=fill"
+        )
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", "color=c=black:s=1080x1920:d=1",
+            "-vf", vf,
+            "-f", "null", "-"
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0)
+
+    def test_named_camera_choreography_syntax(self):
+        import subprocess
+        d = 30
+        for cam in ["zoom_in", "zoom_out", "pan_left", "pan_right"]:
+            if cam == "zoom_in":
+                zp = f"zoompan=z='1.0+0.12*(3*pow(on/{d},2)-2*pow(on/{d},3))':d={d}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=640x360:fps=30"
+            elif cam == "zoom_out":
+                zp = f"zoompan=z='1.12-0.12*(3*pow(on/{d},2)-2*pow(on/{d},3))':d={d}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=640x360:fps=30"
+            elif cam == "pan_left":
+                zp = f"zoompan=z=1.12:d={d}:x='(iw-iw/zoom)*(1-(3*pow(on/{d},2)-2*pow(on/{d},3)))':y='ih/2-(ih/zoom/2)':s=640x360:fps=30"
+            else:
+                zp = f"zoompan=z=1.12:d={d}:x='(iw-iw/zoom)*(3*pow(on/{d},2)-2*pow(on/{d},3))':y='ih/2-(ih/zoom/2)':s=640x360:fps=30"
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "lavfi", "-i", "color=c=black:s=640x360:d=1",
+                "-vf", zp,
+                "-f", "null", "-"
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0)
+
+    def test_bundled_mukta_malar_font_exists(self):
+        from pathlib import Path
+        font_file = Path(__file__).parent.parent / "assets" / "fonts" / "MuktaMalar-Bold.ttf"
+        self.assertTrue(font_file.exists())
+        self.assertTrue(font_file.stat().st_size > 100000)
 
 if __name__ == "__main__":
     unittest.main()

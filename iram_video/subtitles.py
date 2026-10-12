@@ -13,6 +13,18 @@ def format_ass_time(seconds: float) -> str:
         cs = 99
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
+FONTS_DIR = Path(__file__).parent.parent / "assets" / "fonts"
+
+SUBTITLE_PALETTES = {
+    "gold": "\\c&H0000D7FF&",       # Vivid Gold (BGR)
+    "hormozi": "\\c&H0000FFFF&",    # Alex Hormozi Neon Yellow
+    "neon-cyan": "\\c&H00FFFF00&",  # Neon Cyan
+    "neon-green": "\\c&H0000FF00&", # Vivid Emerald
+    "fire-red": "\\c&H000045FF&",   # Fire Orange/Red
+    "purple": "\\c&H00FF00FF&",     # Magenta / Neon Purple
+    "white": "\\c&H00FFFFFF&"       # Crisp White
+}
+
 class KineticSubtitleGenerator:
     """Generates high-retention, word-by-word bouncy karaoke subtitles (Alex Hormozi / CapCut / MrBeast style)."""
 
@@ -21,19 +33,22 @@ class KineticSubtitleGenerator:
         scenes: List[Dict[str, Any]],
         out_ass_path: Path,
         is_shorts: bool = False,
-        language: str = "en"
+        language: str = "en",
+        palette_key: str = "auto"
     ) -> Path:
         res_x = 1080 if is_shorts else 1920
         res_y = 1920 if is_shorts else 1080
 
         is_tamil = (language.lower() in ["ta", "tamil"])
-        font_name = "Noto Sans Tamil" if is_tamil else "JetBrains Mono"
+        font_name = "Mukta Malar" if is_tamil else "JetBrains Mono"
         font_size = 56 if is_shorts else 44
         margin_v = 440 if is_shorts else 180
 
         # Primary Colors (AABBGGRR in ASS hex)
-        # White text: &H00FFFFFF&, Glow Cyan: &H00FFFF00&, Vivid Gold: &H0000D7FF&
-        accent_color = "\\c&H0000D7FF&" if is_shorts else "\\c&H00FFFF00&"
+        if palette_key != "auto" and palette_key.lower() in SUBTITLE_PALETTES:
+            accent_color = SUBTITLE_PALETTES[palette_key.lower()]
+        else:
+            accent_color = "\\c&H0000D7FF&" if is_shorts else "\\c&H00FFFF00&"
 
         header = f"""[Script Info]
 Title: IRAM Kinetic Subtitles

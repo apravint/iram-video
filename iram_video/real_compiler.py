@@ -198,22 +198,36 @@ class RealVideoCompiler:
                 d_frames = int(b_dur * 30) + 15
                 sw, sh = (int(self.w * 1.25), int(self.h * 1.25))
 
-                # Non-linear camera easing curves (smoothstep polynomial: 3*t^2 - 2*t^3)
-                motion_mode = b_idx % 4
-                if motion_mode == 0:
-                    zp = f"zoompan=z='1.0+0.10*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                elif motion_mode == 1:
-                    zp = f"zoompan=z='1.10-0.10*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                elif motion_mode == 2:
-                    zp = f"zoompan=z=1.08:d={d_frames}:x='(iw-iw/zoom)*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                # 2.5D Named Ken Burns Camera Choreography with smoothstep polynomial (3*t^2 - 2*t^3)
+                cam_req = (beat.get("camera") or "").lower().strip()
+                if cam_req == "zoom_in":
+                    zp = f"zoompan=z='1.0+0.12*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                elif cam_req == "zoom_out":
+                    zp = f"zoompan=z='1.12-0.12*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                elif cam_req == "pan_left":
+                    zp = f"zoompan=z=1.12:d={d_frames}:x='(iw-iw/zoom)*(1-(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3)))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                elif cam_req == "pan_right":
+                    zp = f"zoompan=z=1.12:d={d_frames}:x='(iw-iw/zoom)*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
                 else:
-                    zp = f"zoompan=z=1.08:d={d_frames}:x='(iw-iw/zoom)*(1-(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3)))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    # Alternating dynamic movement mode
+                    motion_mode = b_idx % 4
+                    if motion_mode == 0:
+                        zp = f"zoompan=z='1.0+0.12*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    elif motion_mode == 1:
+                        zp = f"zoompan=z='1.12-0.12*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    elif motion_mode == 2:
+                        zp = f"zoompan=z=1.10:d={d_frames}:x='(iw-iw/zoom)*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    else:
+                        zp = f"zoompan=z=1.10:d={d_frames}:x='(iw-iw/zoom)*(1-(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3)))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
 
+                # Cinematic color grading: pop contrast, vibrant saturation
+                color_grade = "eq=contrast=1.05:brightness=-0.01:saturation=1.10"
                 fade_out_st = max(0.1, b_dur - 0.25)
                 fc = (
                     f"[0:v]scale={sw}:{sh}:force_original_aspect_ratio=increase,"
                     f"crop={sw}:{sh},"
                     f"{zp},"
+                    f"{color_grade},"
                     f"fade=t=in:st=0:d=0.25,fade=t=out:st={fade_out_st:.2f}:d=0.25[v]"
                 )
                 cmd = [
@@ -270,7 +284,8 @@ class RealVideoCompiler:
         output_path: Path,
         global_topic: str = "",
         burn_subtitles: bool = False,
-        language: str = "en"
+        language: str = "en",
+        palette_key: str = "auto"
     ):
         """
         Compiles full documentary video from real B-roll shots and programmatic motion graphics
@@ -304,21 +319,32 @@ class RealVideoCompiler:
         ]
         subprocess.run(cmd_cat, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # Optional kinetic subtitles filter
+        # Prepare Video Post-Filters: Retention Progress Bar & Kinetic Subtitles
         v_filters = []
+        if self.is_shorts and total_duration > 0:
+            # 1. Shorts retention progress bar (14px track + glowing cyan fill along bottom)
+            v_filters.append("drawbox=x=0:y=1906:w=iw:h=14:color=black@0.45:t=fill")
+            v_filters.append(f"drawbox=x=0:y=1906:w='min(iw,iw*(t/{max(0.1, total_duration):.2f}))':h=14:color=0x00E5FF@0.95:t=fill")
+
         if burn_subtitles:
             ass_path = self.work_dir / "real_subtitles.ass"
-            KineticSubtitleGenerator.generate_ass(scenes, ass_path, is_shorts=self.is_shorts, language=language)
+            KineticSubtitleGenerator.generate_ass(scenes, ass_path, is_shorts=self.is_shorts, language=language, palette_key=palette_key)
             if ass_path.exists():
                 ass_escaped = str(ass_path).replace("\\", "/").replace(":", "\\:")
-                v_filters.append(f"ass={ass_escaped}")
+                fonts_dir = Path(__file__).parent.parent / "assets" / "fonts"
+                if fonts_dir.exists():
+                    fonts_dir_escaped = str(fonts_dir).replace("\\", "/").replace(":", "\\:")
+                    v_filters.append(f"ass=filename={ass_escaped}:fontsdir={fonts_dir_escaped}:shaping=1")
+                else:
+                    v_filters.append(f"ass={ass_escaped}")
 
-        # Mix documentary background music with Dynamic Audio Sidechain Ducking
+        # Broadcast Studio Audio Mastering (EBU R128 + Vocal Presence EQ + BGM Low-pass Ducking)
         if bg_music and bg_music.exists():
             fc = (
-                "[1:a]volume=0.28[bg];"
-                "[bg][0:a]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
-                "[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+                "[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[voice_master];"
+                "[1:a]lowpass=f=4000,volume=0.20[bg_clean];"
+                "[bg_clean][voice_master]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
+                "[voice_master][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
             )
             cmd_mix = [
                 "ffmpeg", "-y",
@@ -335,14 +361,21 @@ class RealVideoCompiler:
 
             cmd_mix.extend([
                 "-c:a", "aac",
-                "-b:a", "256k",
+                "-b:a", "320k",
+                "-ar", "48000",
                 "-movflags", "+faststart",
                 str(output_path)
             ])
         else:
+            fc = (
+                "[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[aout]"
+            )
             cmd_mix = [
                 "ffmpeg", "-y",
-                "-i", str(raw_concat)
+                "-i", str(raw_concat),
+                "-filter_complex", fc,
+                "-map", "0:v",
+                "-map", "[aout]"
             ]
             if v_filters:
                 cmd_mix.extend(["-vf", ",".join(v_filters), "-c:v", "libx264", "-preset", "veryfast"])
@@ -350,6 +383,9 @@ class RealVideoCompiler:
                 cmd_mix.extend(["-c:v", "copy"])
 
             cmd_mix.extend([
+                "-c:a", "aac",
+                "-b:a", "320k",
+                "-ar", "48000",
                 "-movflags", "+faststart",
                 str(output_path)
             ])
