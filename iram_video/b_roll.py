@@ -207,15 +207,16 @@ class MediaFetcher:
         return results
 
     @staticmethod
-    def search_pexels(query: str, require_video: bool = False) -> List[Dict[str, Any]]:
-        """Searches Pexels API for HD video clips and photography if PEXELS_API_KEY is available."""
-        key = os.getenv("PEXELS_API_KEY")
+    def search_pexels(query: str, require_video: bool = False, orientation: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Searches Pexels API for HD video clips and photography with orientation filtering (portrait / landscape)."""
+        key = os.getenv("PEXELS_API_KEY") or os.getenv("PEXELS_KEY")
         if not key:
             return []
         headers = {"Authorization": key, "User-Agent": USER_AGENT}
         results = []
+        orient_param = f"&orientation={orientation}" if orientation in ["portrait", "landscape"] else ""
         try:
-            v_url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(query)}&per_page=6"
+            v_url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(query)}&per_page=12{orient_param}"
             req = urllib.request.Request(v_url, headers=headers)
             with urllib.request.urlopen(req, timeout=6) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -233,7 +234,7 @@ class MediaFetcher:
                             })
                             break
             if not require_video:
-                p_url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&per_page=8"
+                p_url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&per_page=12{orient_param}"
                 req = urllib.request.Request(p_url, headers=headers)
                 with urllib.request.urlopen(req, timeout=6) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
@@ -351,13 +352,14 @@ class MediaFetcher:
         return results
 
     @classmethod
-    def search_media(cls, query: str, require_video: bool = False, global_topic: str = "") -> List[Dict[str, Any]]:
+    def search_media(cls, query: str, require_video: bool = False, global_topic: str = "", is_shorts: bool = False) -> List[Dict[str, Any]]:
         """Multi-source stock provider waterfall: Google CSE -> Pexels -> Pixabay -> Wikimedia Commons."""
         g_results = cls.search_google_custom_search(query)
         if g_results:
             return g_results
 
-        px_results = cls.search_pexels(query, require_video=require_video)
+        orientation = "portrait" if is_shorts else "landscape"
+        px_results = cls.search_pexels(query, require_video=require_video, orientation=orientation)
         if px_results:
             return px_results
 

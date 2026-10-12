@@ -77,7 +77,7 @@ class FilmCompiler:
         """Renders an individual dialogue shot with talking character, listening character, cinema subtitles, and Foley SFX."""
         out_shot = self.shots_dir / f"{scene.get('act_title', 'act')[:8]}_line_{line_idx:02d}.mp4"
 
-        setting_name = scene.get("setting", "cyberpunk_city")
+        setting_name = scene.get("setting", "modern_studio")
         bg_img = EnvironmentRenderer.render_set(setting_name, 1920, 1080)
 
         # Determine who is speaking
@@ -106,7 +106,7 @@ class FilmCompiler:
         draw_mixed_line(draw, 70, 84, loc_str, (130, 165, 210), fta_loc, fen_loc)
 
         # Cinema Subtitle in bottom letterbox
-        tag_color = (0, 229, 255, 255) if is_char1_speaking else (255, 170, 0, 255)
+        tag_color = (59, 130, 246, 255) if is_char1_speaking else (245, 158, 11, 255)
         speaker_tag = f"{speaker.upper()}: "
         fta_sub, fen_sub = get_fonts(26, bold=True)
 
@@ -153,7 +153,7 @@ class FilmCompiler:
 
         if sfx_to_use:
             fc = (
-                f"[0:v]zoompan=z='min(zoom+0.0007,1.10)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
+                f"[0:v]zoompan=z='min(zoom+0.0002,1.025)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
                 f"{sprite_chain};"
                 f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=11:allf=t+u[vfinal];"
                 f"[2:a]bass=g=3:f=110,equalizer=f=3200:t=q:w=1:g=2[a_speech];"
@@ -177,7 +177,7 @@ class FilmCompiler:
             ]
         else:
             fc = (
-                f"[0:v]zoompan=z='min(zoom+0.0007,1.10)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
+                f"[0:v]zoompan=z='min(zoom+0.0002,1.025)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
                 f"{sprite_chain};"
                 f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=11:allf=t+u[vfinal]"
             )

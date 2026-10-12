@@ -54,13 +54,13 @@ class VideoCompiler:
         fc_parts = []
         cur_v = "[0:v]"
 
-        # 1. Base motion (Cinematic camera dolly push-in)
+        # 1. Base motion (Cinematic subtle steady push-in)
         if self.is_cinema:
             d_frames = int(duration * framerate) + 48
             if self.is_shorts:
-                fc_parts.append(f"{cur_v}zoompan=z='min(zoom+0.0008,1.12)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps={framerate}[v_bg]")
+                fc_parts.append(f"{cur_v}zoompan=z='min(zoom+0.0002,1.03)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps={framerate}[v_bg]")
             else:
-                fc_parts.append(f"{cur_v}zoompan=z='min(zoom+0.0008,1.12)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps={framerate}[v_bg]")
+                fc_parts.append(f"{cur_v}zoompan=z='min(zoom+0.0002,1.03)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps={framerate}[v_bg]")
             cur_v = "[v_bg]"
 
         # 2. Character overlay

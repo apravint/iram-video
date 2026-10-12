@@ -212,13 +212,13 @@ class MotionCanvas:
         subheadline = label_en if is_tamil else label_ta
         phrase_excerpt = beat.get("phrase", "")[:75]
 
-        # Colors
-        c_bg = (10, 14, 24)
-        c_card = (16, 24, 40)
-        c_accent = (0, 229, 255)
-        c_glow = (168, 85, 247)
-        c_white = (255, 255, 255)
-        c_dim = (140, 165, 200)
+        # Colors: Clean modern editorial aesthetic (deep slate, crisp white, corporate blue)
+        c_bg = (15, 23, 42)
+        c_card = (30, 41, 59)
+        c_accent = (59, 130, 246)
+        c_glow = (148, 163, 184)
+        c_white = (248, 250, 252)
+        c_dim = (148, 163, 184)
 
         # Card bounds
         if not is_shorts:
@@ -256,19 +256,15 @@ class MotionCanvas:
                     for gy in range(step // 2, h, step):
                         draw.point((gx, gy), fill=(30, 42, 65))
 
-                # 2. Glowing Glassmorphism Card
-                draw.rectangle([card_x1, card_y1, card_x2, card_y2], fill=c_card, outline=c_accent, width=2)
-
-                # Outer soft neon shadow lines
-                draw.rectangle([card_x1 - 2, card_y1 - 2, card_x2 + 2, card_y2 + 2], outline=(0, 229, 255, 60), width=1)
-                draw.rectangle([card_x1 - 4, card_y1 - 4, card_x2 + 4, card_y2 + 4], outline=(0, 229, 255, 30), width=1)
+                # 2. Sleek Modern Card
+                draw.rectangle([card_x1, card_y1, card_x2, card_y2], fill=c_card, outline=(51, 65, 85), width=2)
 
                 # 3. Top Status Pill ("● PHASE 2 METRIC" / "● அதிகாரப்பூர்வ விவரம்")
                 pill_y = card_y1 + 36
                 pill_w = 260
-                draw.rectangle([card_x1 + 40, pill_y, card_x1 + 40 + pill_w, pill_y + 36], fill=(24, 34, 56), outline=c_glow, width=1)
+                draw.rectangle([card_x1 + 40, pill_y, card_x1 + 40 + pill_w, pill_y + 36], fill=(15, 23, 42), outline=(51, 65, 85), width=1)
                 status_txt = "● PHASE 2 METRIC" if not is_tamil else "● இரண்டாம் கட்டம்"
-                draw_mixed_line(draw, card_x1 + 54, pill_y + 8, status_txt, c_glow, fta_pill, fen_pill)
+                draw_mixed_line(draw, card_x1 + 54, pill_y + 8, status_txt, c_accent, fta_pill, fen_pill)
 
                 # 4. Metric Headline
                 head_y = pill_y + 58
@@ -399,13 +395,13 @@ class MotionCanvas:
                 # 2. Header Box & Route Identifier
                 if not is_shorts:
                     draw.rectangle([120, 70, w - 120, 180], fill=(16, 24, 40), outline=line_col, width=2)
-                    draw.rectangle([140, 90, 340, 122], fill=(24, 34, 56), outline=(0, 229, 255), width=1)
-                    draw_mixed_line(draw, 155, 96, "● CHENNAI METRO PHASE 2", (0, 229, 255), fta_badge, fen_badge)
+                    draw.rectangle([140, 90, 340, 122], fill=(24, 34, 56), outline=(59, 130, 246), width=1)
+                    draw_mixed_line(draw, 155, 96, "● CHENNAI METRO PHASE 2", (59, 130, 246), fta_badge, fen_badge)
                     draw_mixed_line(draw, 140, 132, title, (255, 255, 255), fta_title, fen_title)
                 else:
                     draw.rectangle([60, 120, w - 60, 250], fill=(16, 24, 40), outline=line_col, width=2)
-                    draw.rectangle([80, 140, 280, 172], fill=(24, 34, 56), outline=(0, 229, 255), width=1)
-                    draw_mixed_line(draw, 95, 146, "● METRO CORRIDOR", (0, 229, 255), fta_badge, fen_badge)
+                    draw.rectangle([80, 140, 280, 172], fill=(24, 34, 56), outline=(59, 130, 246), width=1)
+                    draw_mixed_line(draw, 95, 146, "● METRO CORRIDOR", (59, 130, 246), fta_badge, fen_badge)
                     draw_mixed_line(draw, 80, 185, title[:40], (255, 255, 255), fta_title, fen_title)
 
                 # 3. Draw Inactive Track Line (Dim Grey Blueprint Path)
@@ -423,7 +419,7 @@ class MotionCanvas:
                 for i in range(curr_seg_idx):
                     # Outer soft glow
                     draw.line([points[i], points[i + 1]], fill=tuple(int(c * 0.4) for c in line_col), width=18)
-                    # Inner core neon stroke
+                    # Inner core stroke
                     draw.line([points[i], points[i + 1]], fill=line_col, width=10)
 
                 # Partial active segment
@@ -450,11 +446,11 @@ class MotionCanvas:
                     if is_active:
                         # Radar pulse ring
                         pulse_r = 18 + int(8 * math.sin(frame_idx * 0.35 + idx))
-                        draw.ellipse([(sx - pulse_r, sy - pulse_r), (sx + pulse_r, sy + pulse_r)], outline=(0, 229, 255), width=2)
+                        draw.ellipse([(sx - pulse_r, sy - pulse_r), (sx + pulse_r, sy + pulse_r)], outline=(59, 130, 246), width=2)
                         # Solid illuminated station core
                         draw.ellipse([(sx - 10, sy - 10), (sx + 10, sy + 10)], fill=(255, 255, 255), outline=line_col, width=3)
                         text_col = (255, 255, 255)
-                        sub_col = (0, 229, 255)
+                        sub_col = (148, 163, 184)
                     else:
                         # Inactive dim dot
                         draw.ellipse([(sx - 7, sy - 7), (sx + 7, sy + 7)], fill=(45, 60, 85), outline=(65, 85, 115), width=2)

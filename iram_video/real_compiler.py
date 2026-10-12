@@ -17,11 +17,13 @@ class RealVideoCompiler:
     Features dynamic audio sidechain ducking and smoothstep Ken Burns easing.
     """
 
-    def __init__(self, work_dir: Path, is_shorts: bool = False, provider: str = "auto", global_topic: str = ""):
+    def __init__(self, work_dir: Path, is_shorts: bool = False, provider: str = "auto", global_topic: str = "", steady_camera: bool = True, start_image: Optional[Path] = None):
         self.work_dir = work_dir
         self.is_shorts = is_shorts
         self.provider = provider
         self.global_topic = global_topic
+        self.steady_camera = steady_camera
+        self.start_image = start_image
         self.broll_dir = work_dir / "broll_media"
         self.broll_dir.mkdir(parents=True, exist_ok=True)
         self.shots_dir = work_dir / "real_shots"
@@ -101,9 +103,12 @@ class RealVideoCompiler:
                 pass
 
             d_frames = int(duration * 30) + 30
-            sw, sh = (int(self.w * 1.3), int(self.h * 1.3))
-            # Smoothstep easing zoompan
-            zp = f"zoompan=z='1.0+0.10*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+            if self.steady_camera:
+                sw, sh = (int(self.w * 1.04), int(self.h * 1.04))
+                zp = f"zoompan=z='1.0+0.02*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+            else:
+                sw, sh = (int(self.w * 1.15), int(self.h * 1.15))
+                zp = f"zoompan=z='1.0+0.05*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
             fc = (
                 f"[0:v]scale={sw}:{sh}:force_original_aspect_ratio=increase,"
                 f"crop={sw}:{sh},"
@@ -134,6 +139,8 @@ class RealVideoCompiler:
 
         # Extract rapid visual beats (cutting on sentence boundaries with semantic classifier)
         beats = MediaFetcher.extract_scene_beats(scene, duration, global_topic=self.global_topic)
+        if scene_idx == 0 and self.start_image and beats:
+            beats[0]["start_image"] = str(self.start_image)
 
         if len(beats) <= 1:
             beat = beats[0] if beats else {"query": self.global_topic, "duration": duration}
@@ -196,32 +203,35 @@ class RealVideoCompiler:
                     pass
 
                 d_frames = int(b_dur * 30) + 15
-                sw, sh = (int(self.w * 1.25), int(self.h * 1.25))
-
-                # 2.5D Named Ken Burns Camera Choreography with smoothstep polynomial (3*t^2 - 2*t^3)
                 cam_req = (beat.get("camera") or "").lower().strip()
-                if cam_req == "zoom_in":
-                    zp = f"zoompan=z='1.0+0.12*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                elif cam_req == "zoom_out":
-                    zp = f"zoompan=z='1.12-0.12*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                elif cam_req == "pan_left":
-                    zp = f"zoompan=z=1.12:d={d_frames}:x='(iw-iw/zoom)*(1-(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3)))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                elif cam_req == "pan_right":
-                    zp = f"zoompan=z=1.12:d={d_frames}:x='(iw-iw/zoom)*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                else:
-                    # Alternating dynamic movement mode
-                    motion_mode = b_idx % 4
-                    if motion_mode == 0:
-                        zp = f"zoompan=z='1.0+0.12*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                    elif motion_mode == 1:
-                        zp = f"zoompan=z='1.12-0.12*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                    elif motion_mode == 2:
-                        zp = f"zoompan=z=1.10:d={d_frames}:x='(iw-iw/zoom)*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                    else:
-                        zp = f"zoompan=z=1.10:d={d_frames}:x='(iw-iw/zoom)*(1-(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3)))':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
 
-                # Cinematic color grading: pop contrast, vibrant saturation
-                color_grade = "eq=contrast=1.05:brightness=-0.01:saturation=1.10"
+                if self.steady_camera:
+                    # Steady camera: slow gentle micro-drift (1.00 -> 1.025) or static framing. ZERO lateral pans or whip jumps.
+                    sw, sh = (int(self.w * 1.04), int(self.h * 1.04))
+                    if cam_req in ["static", "steady", "fixed"]:
+                        zp = f"zoompan=z=1.0:d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    elif cam_req == "zoom_out":
+                        zp = f"zoompan=z='1.025-0.025*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    elif cam_req == "zoom_in":
+                        zp = f"zoompan=z='1.0+0.025*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    else:
+                        # Subtle alternating breathing push or stable hold (centered)
+                        if b_idx % 2 == 0:
+                            zp = f"zoompan=z='1.0+0.02*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                        else:
+                            zp = f"zoompan=z=1.015:d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                else:
+                    # Dynamic legacy mode (tamed down from 1.12 to max 1.05)
+                    sw, sh = (int(self.w * 1.15), int(self.h * 1.15))
+                    if cam_req == "zoom_in":
+                        zp = f"zoompan=z='1.0+0.05*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    elif cam_req == "zoom_out":
+                        zp = f"zoompan=z='1.05-0.05*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+                    else:
+                        zp = f"zoompan=z='1.0+0.03*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
+
+                # Clean natural color grading: subtle contrast, authentic saturation
+                color_grade = "eq=contrast=1.02:brightness=0.0:saturation=1.02"
                 fade_out_st = max(0.1, b_dur - 0.25)
                 fc = (
                     f"[0:v]scale={sw}:{sh}:force_original_aspect_ratio=increase,"

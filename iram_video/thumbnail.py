@@ -7,9 +7,9 @@ from .renderer import get_fonts, draw_mixed_line, split_runs, get_mixed_width
 def generate_thumbnail(title: str, bullets: List[str], theme: Dict[str, Any], output_path: Path, is_shorts: bool = False, is_cinema: bool = False, character: Optional[str] = None):
     w, h = (1080, 1920) if is_shorts else (1280, 720)
     
-    bg_color = tuple(theme.get("bg", [10, 14, 24])) + (255,)
-    accent_color = tuple(theme.get("accent", [0, 229, 255])) + (255,)
-    sec_color = tuple(theme.get("secondary", [168, 85, 247])) + (255,)
+    bg_color = tuple(theme.get("bg", [15, 23, 42])) + (255,)
+    accent_color = tuple(theme.get("accent", [59, 130, 246])) + (255,)
+    sec_color = tuple(theme.get("secondary", [148, 163, 184])) + (255,)
 
     img = Image.new("RGBA", (w, h), bg_color)
     draw = ImageDraw.Draw(img)

@@ -17,18 +17,18 @@ The screenplay structure must follow:
 
 For each scene:
 1. "act_title": e.g. "ACT I: THE UNSEEN PROTOCOL"
-2. "setting": One of ["cyberpunk_city", "quantum_lab", "deep_space", "digital_matrix"]
-3. "time_and_place": e.g. "Orbital Command Station — 04:00 GST"
+2. "setting": One of ["modern_studio", "executive_boardroom", "tech_campus", "quantum_lab", "deep_space"]
+3. "time_and_place": e.g. "Global Innovation Hub — 09:00 EST"
 4. "action": Brief dramatic description of visual atmosphere (1-2 sentences)
 5. "dialogue": An array of 2 to 4 alternating spoken lines between the characters:
    [
      {"speaker": "CharacterName", "line": "The exact spoken sentence (concise, impactful, 12-22 words).", "emotion": "concerned/confident/happy/serious"}
    ]
-6. "music_mood": One of ["trailer", "cyber", "tech", "ambient"]
+6. "music_mood": One of ["documentary", "acoustic", "tech", "ambient", "trailer"]
 
 Also provide:
-- "film_title": High-impact cinematic movie title (e.g. "CYBERSWARM: Genesis of the Synthetic Mind")
-- "genre": e.g. "Sci-Fi Cyberpunk Animation"
+- "film_title": High-impact cinematic movie title (e.g. "THE ARCHITECT: Foundations of Future Intelligence")
+- "genre": e.g. "Cinematic Narrative & Tech Documentary"
 - "cast": Array of 2 characters:
   [
     {"name": "Nova", "role": "Lead Architect", "character_type": "presenter", "voice_key": "female"},

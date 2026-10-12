@@ -16,13 +16,15 @@ def format_ass_time(seconds: float) -> str:
 FONTS_DIR = Path(__file__).parent.parent / "assets" / "fonts"
 
 SUBTITLE_PALETTES = {
-    "gold": "\\c&H0000D7FF&",       # Vivid Gold (BGR)
-    "hormozi": "\\c&H0000FFFF&",    # Alex Hormozi Neon Yellow
-    "neon-cyan": "\\c&H00FFFF00&",  # Neon Cyan
-    "neon-green": "\\c&H0000FF00&", # Vivid Emerald
-    "fire-red": "\\c&H000045FF&",   # Fire Orange/Red
-    "purple": "\\c&H00FF00FF&",     # Magenta / Neon Purple
-    "white": "\\c&H00FFFFFF&"       # Crisp White
+    "gold": "\\c&H0000D7FF&",       # Vivid Gold / Amber (BGR)
+    "white": "\\c&H00FFFFFF&",      # Crisp White
+    "blue": "\\c&H00F6823B&",       # Corporate Blue (#3B82F6)
+    "slate": "\\c&H00B8A394&",      # Slate Neutral (#94A3B8)
+    "fire-red": "\\c&H000045FF&",   # Warm Crimson
+    "hormozi": "\\c&H0000FFFF&",    # Yellow
+    "neon-cyan": "\\c&H00FFFF00&",  # Cyan
+    "neon-green": "\\c&H0000FF00&", # Emerald
+    "purple": "\\c&H00FF00FF&",     # Magenta
 }
 
 class KineticSubtitleGenerator:
@@ -48,7 +50,7 @@ class KineticSubtitleGenerator:
         if palette_key != "auto" and palette_key.lower() in SUBTITLE_PALETTES:
             accent_color = SUBTITLE_PALETTES[palette_key.lower()]
         else:
-            accent_color = "\\c&H0000D7FF&" if is_shorts else "\\c&H00FFFF00&"
+            accent_color = "\\c&H0000D7FF&" if is_shorts else "\\c&H00FFFFFF&"
 
         header = f"""[Script Info]
 Title: IRAM Kinetic Subtitles

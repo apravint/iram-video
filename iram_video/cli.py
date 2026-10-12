@@ -87,11 +87,33 @@ def main():
     parser.add_argument("--ai-video", dest="ai_video", action="store_true", help="Enable AI generative video synthesis with automatic multi-tier fallback")
     parser.add_argument("--subtitle-palette", default="auto", choices=["auto", "gold", "hormozi", "neon-cyan", "neon-green", "fire-red", "purple", "white"], help="Subtitle color palette ('gold', 'hormozi', 'neon-cyan', 'neon-green', 'fire-red', 'purple', 'white')")
     parser.add_argument("--recipe", choices=list(SHOT_RECIPES.keys()), default=None, help="Cinematic shotcraft recipe card (e.g. 'hero_reveal', 'macro_orbit', 'speed_ramp', 'isometric_exploded')")
+    parser.add_argument("--steady", "--steady-cam", dest="steady_camera", action="store_true", default=True, help="Enable steady-cam mode: subtle micro-drift or static framing with zero dizzying camera motion (default: True)")
+    parser.add_argument("--dynamic-cam", dest="steady_camera", action="store_false", help="Enable dynamic legacy camera motion with larger zooms and pans")
+    parser.add_argument("--mcp", action="store_true", help="Launch the Model Context Protocol (MCP) JSON-RPC server on stdio for LLMs & AI agents")
+    parser.add_argument("--extend", default=None, help="Continuous scene extension mode: path to previous MP4 video to chain and extend")
+    parser.add_argument("--image", "--start-image", dest="start_image", default=None, help="Image-to-Video storyboarding: path to seed starting image/photo")
     parser.add_argument("--brag", default=None, help="Repository-to-video mode: auto-inspect a codebase/git repository and craft a developer launch showcase")
     parser.add_argument("--avatar", default=None, help="Digital human talking avatar mode: pass a portrait image to composite talking presenter")
     parser.add_argument("--tension", action="store_true", help="Apply drama tension curve analysis and dramatic beat scoring")
 
     args = parser.parse_args()
+
+    if args.mcp:
+        from .mcp_server import main as mcp_main
+        mcp_main()
+        return
+
+    if args.extend:
+        prev_video = Path(args.extend).resolve()
+        if not prev_video.exists():
+            print(f"❌ Previous video not found for extension: {prev_video}")
+            sys.exit(1)
+        out_video = Path(args.output or f"./{prev_video.stem}_extended.mp4").resolve()
+        prompt = args.prompt or "Continuing the sequence seamlessly into the next scene"
+        print(f"🎞️ [SCENE EXTENSION] Extending '{prev_video.name}' with prompt: '{prompt}'...")
+        AIVideoEngine.extend_video(prev_video, prompt, out_video, duration=4.0, is_shorts=args.shorts)
+        print(f"🎉 EXTENDED VIDEO CREATED: {out_video}")
+        return
 
     if args.serve or (len(sys.argv) > 1 and sys.argv[1] == "serve"):
         start_server(args.port)
@@ -186,7 +208,7 @@ def main():
         elif is_real:
             music_mood = "documentary"
         else:
-            music_mood = "cyber"
+            music_mood = "tech"
 
     if is_film:
         format_label = "Animated Feature Film (Multi-Character Dialogue & Procedural Sets)"
@@ -344,7 +366,8 @@ def main():
         if is_real:
             combined_topic = f"{args.prompt} | {video_title}"
             print(f"🎥 [4/5] Sourcing video footage ({generator_prov.upper()} generative AI + stock fallback)...")
-            real_compiler = RealVideoCompiler(work_dir, is_shorts=is_shorts, provider=generator_prov, global_topic=combined_topic)
+            start_img = Path(args.start_image).resolve() if args.start_image else None
+            real_compiler = RealVideoCompiler(work_dir, is_shorts=is_shorts, provider=generator_prov, global_topic=combined_topic, steady_camera=args.steady_camera, start_image=start_img)
             sub_status = f"with subtitles [{args.subtitle_palette}]" if burn_subtitles else "no subtitles"
             print(f"⚙️  [5/5] Compiling master documentary video with acoustic score ({sub_status})...")
             real_compiler.compile_real_video(scenes, bg_music_wav, output_mp4, global_topic=combined_topic, burn_subtitles=burn_subtitles, language=lang, palette_key=args.subtitle_palette)

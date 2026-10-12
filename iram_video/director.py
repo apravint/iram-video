@@ -36,10 +36,11 @@ For each scene, you provide:
 Also provide:
 - "video_title": High-CTR, compelling YouTube video title (max 75 chars)
 - "theme_palette": Suggested color scheme:
-  - "bg": [r, g, b] (dark background, e.g. [10, 14, 24])
-  - "accent": [r, g, b] (primary glow, e.g. [0, 229, 255])
-  - "secondary": [r, g, b] (secondary accent, e.g. [168, 85, 247] or [0, 255, 136])
-  - "card_bg": [r, g, b] (e.g. [16, 24, 42])
+  - "bg": [r, g, b] (deep slate background, e.g. [15, 23, 42])
+  - "accent": [r, g, b] (primary clean accent, e.g. [59, 130, 246] or [37, 99, 235])
+  - "secondary": [r, g, b] (secondary neutral/amber, e.g. [148, 163, 184] or [245, 158, 11])
+  - "card_bg": [r, g, b] (slate card surface, e.g. [30, 41, 59])
+- "visual_policy": STRICT REQUIREMENT - AVOID all cyberpunk tropes, neon pink, magenta, or glowing green. Maintain clean, modern, professional enterprise aesthetics (Vox/Apple Keynote style).
 - "youtube_metadata":
   - "description": A complete, ready-to-paste YouTube description with chapter placeholders
   - "tags": Array of 8-15 relevant YouTube tags
@@ -68,6 +69,12 @@ class Director:
     def direct(self, prompt: str, scene_count: int = None, style_hint: str = None, language: str = "en", is_shorts: bool = False, is_cinema: bool = False, is_real: bool = False, character: str = None) -> Dict[str, Any]:
         """Queries Google Gemini to outline and write the screenplay with multi-model fallback."""
         user_msg = f"User Prompt / Video Topic: {prompt}\n"
+        user_msg += (
+            "AESTHETIC & CAMERA DIRECTIVE:\n"
+            "- AVOID all cyberpunk tropes, neon pink, magenta, glowing acid green, or hacker stereotypes.\n"
+            "- Use clean, modern, professional editorial styling (deep slate, crisp white typography, subtle cobalt/warm amber accents).\n"
+            "- Camera motion must be subtle and steady (e.g. 'steady', 'zoom_in', 'zoom_out'). NO violent whipping or chaotic motion.\n"
+        )
         
         if is_real:
             user_msg += (

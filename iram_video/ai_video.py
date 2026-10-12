@@ -384,6 +384,11 @@ class AIVideoEngine:
 
         target_mp4 = out_dir / f"beat_{beat_id}_ai.mp4"
 
+        # Check if a custom starting image is supplied (Image-to-Video Storyboarding)
+        start_img = beat.get("start_image")
+        if start_img and Path(start_img).exists():
+            return Path(start_img)
+
         # Check cached AI video
         if target_mp4.exists() and target_mp4.stat().st_size > 10000:
             return target_mp4
@@ -439,3 +444,81 @@ class AIVideoEngine:
         if not fallback_img.exists():
             MediaFetcher.create_clean_documentary_frame(query, fallback_img)
         return fallback_img
+
+    @classmethod
+    def extend_video(
+        cls,
+        previous_video: Path,
+        prompt: str,
+        out_path: Path,
+        duration: float = 4.0,
+        is_shorts: bool = False
+    ) -> Path:
+        """
+        Extends an existing video clip into a continuous multi-scene film.
+        Extracts the final keyframe from previous_video, synthesizes the continuation,
+        and seamlessly stitches both clips with smooth blending.
+        """
+        import subprocess
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_dir = out_path.parent / "extend_tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+
+        last_frame_path = tmp_dir / f"last_frame_{int(time.time())}.png"
+        ext_clip_path = tmp_dir / f"ext_clip_{int(time.time())}.mp4"
+
+        # 1. Extract last frame from previous_video
+        cmd_extract = [
+            "ffmpeg", "-y",
+            "-sseof", "-0.1",
+            "-i", str(previous_video),
+            "-vframes", "1",
+            "-q:v", "2",
+            str(last_frame_path)
+        ]
+        subprocess.run(cmd_extract, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # 2. Synthesize extension scene using last frame as starting seed
+        beat = {
+            "query": prompt,
+            "phrase": prompt,
+            "duration": duration,
+            "ai_prompt": prompt,
+            "start_image": str(last_frame_path)
+        }
+        res_ext = cls.fetch_or_generate_beat_media(beat, tmp_dir, "ext", is_shorts=is_shorts)
+
+        # If res_ext is an image, convert to video with subtle steady motion
+        if res_ext.suffix.lower() in [".png", ".jpg", ".jpeg"]:
+            d_frames = int(duration * 30)
+            w, h = (1080, 1920) if is_shorts else (1920, 1080)
+            fc = f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},zoompan=z='1.0+0.02*(on/{d_frames})':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps=30[v]"
+            cmd_img2vid = [
+                "ffmpeg", "-y",
+                "-loop", "1", "-i", str(res_ext),
+                "-filter_complex", fc,
+                "-map", "[v]",
+                "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+                "-t", f"{duration:.3f}",
+                str(ext_clip_path)
+            ]
+            subprocess.run(cmd_img2vid, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            ext_clip_path = res_ext
+
+        # 3. Concatenate previous_video and ext_clip_path
+        concat_txt = tmp_dir / "concat_list.txt"
+        with open(concat_txt, "w") as f:
+            f.write(f"file '{previous_video.resolve()}'\n")
+            f.write(f"file '{ext_clip_path.resolve()}'\n")
+
+        cmd_cat = [
+            "ffmpeg", "-y",
+            "-f", "concat", "-safe", "0",
+            "-i", str(concat_txt),
+            "-c:v", "libx264", "-preset", "veryfast",
+            "-pix_fmt", "yuv420p",
+            str(out_path)
+        ]
+        subprocess.run(cmd_cat, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return out_path

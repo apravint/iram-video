@@ -140,10 +140,10 @@ class SlideRenderer:
         self.height = 1920 if is_shorts else 1080
 
         theme = theme or {}
-        self.bg_color = tuple(theme.get("bg", [10, 14, 24])) + (255,)
-        self.accent_color = tuple(theme.get("accent", [0, 229, 255])) + (255,)
-        self.sec_color = tuple(theme.get("secondary", [168, 85, 247])) + (255,)
-        self.card_bg = tuple(theme.get("card_bg", [16, 24, 42])) + (235,)
+        self.bg_color = tuple(theme.get("bg", [15, 23, 42])) + (255,)
+        self.accent_color = tuple(theme.get("accent", [59, 130, 246])) + (255,)
+        self.sec_color = tuple(theme.get("secondary", [148, 163, 184])) + (255,)
+        self.card_bg = tuple(theme.get("card_bg", [30, 41, 59])) + (245,)
 
     def create_canvas(self, video_title: str) -> Tuple[Image.Image, ImageDraw.Draw]:
         img = Image.new("RGBA", (self.width, self.height), self.bg_color)
@@ -266,9 +266,9 @@ class SlideRenderer:
             # Terminal / Code Simulation Box in Lower-Middle Area
             term_y = start_y + card_h + 35
             term_h = 440
-            draw.rectangle([(60, term_y), (60 + card_w, term_y + term_h)], fill=(12, 16, 24), outline=(0, 255, 136), width=2)
-            draw.rectangle([(60, term_y), (60 + card_w, term_y + 44)], fill=(20, 28, 40))
-            draw.line([(60, term_y + 44), (60 + card_w, term_y + 44)], fill=(0, 255, 136), width=1)
+            draw.rectangle([(60, term_y), (60 + card_w, term_y + term_h)], fill=(15, 23, 42), outline=(51, 65, 85), width=2)
+            draw.rectangle([(60, term_y), (60 + card_w, term_y + 44)], fill=(30, 41, 59))
+            draw.line([(60, term_y + 44), (60 + card_w, term_y + 44)], fill=(51, 65, 85), width=1)
 
             # Window controls
             draw.ellipse([(80, term_y + 14), (96, term_y + 30)], fill=(239, 68, 68))
@@ -276,36 +276,36 @@ class SlideRenderer:
             draw.ellipse([(136, term_y + 14), (152, term_y + 30)], fill=(34, 197, 94))
 
             fta_tt, fen_tt = get_fonts(15, bold=True)
-            draw_mixed_line(draw, 170, term_y + 12, "termux ~ bash (Android Linux)", (140, 165, 195), fta_tt, fen_tt)
+            draw_mixed_line(draw, 170, term_y + 12, "termux ~ bash (Android Linux)", (148, 163, 184), fta_tt, fen_tt)
 
             # Realistic CLI commands based on scene
             h_low = heading.lower()
             if any(k in h_low for k in ["start", "intro", "mobile", "full", "linux"]):
                 c_lines = [
-                    ("$ termux-setup-storage", (0, 255, 136)),
-                    ("[✓] Storage access granted (/sdcard)", (130, 215, 170)),
-                    ("$ uname -m", (0, 255, 136)),
-                    ("aarch64 (Linux 5.15-android)", (190, 215, 240)),
-                    ("$ echo 'Linux on mobile is ready'", (0, 255, 136)),
-                    ("Linux on mobile is ready", (255, 255, 255))
+                    ("$ termux-setup-storage", (56, 189, 248)),
+                    ("[✓] Storage access granted (/sdcard)", (148, 163, 184)),
+                    ("$ uname -m", (56, 189, 248)),
+                    ("aarch64 (Linux 5.15-android)", (203, 213, 225)),
+                    ("$ echo 'Linux on mobile is ready'", (56, 189, 248)),
+                    ("Linux on mobile is ready", (248, 250, 252))
                 ]
             elif any(k in h_low for k in ["pack", "tool", "apt", "pkg", "install"]):
                 c_lines = [
-                    ("$ pkg update -y && pkg upgrade", (0, 255, 136)),
-                    ("[✓] 1,420 packages updated", (130, 215, 170)),
-                    ("$ pkg install python git openssh neovim", (0, 255, 136)),
-                    ("[✓] Installed Python 3.12, Git 2.44, Neovim", (130, 215, 170)),
-                    ("$ python -c \"print('Hello from Android')\"", (0, 255, 136)),
-                    ("Hello from Android", (255, 215, 0))
+                    ("$ pkg update -y && pkg upgrade", (56, 189, 248)),
+                    ("[✓] 1,420 packages updated", (148, 163, 184)),
+                    ("$ pkg install python git openssh neovim", (56, 189, 248)),
+                    ("[✓] Installed Python 3.12, Git 2.44, Neovim", (148, 163, 184)),
+                    ("$ python -c \"print('Hello from Android')\"", (56, 189, 248)),
+                    ("Hello from Android", (245, 158, 11))
                 ]
             else:
                 c_lines = [
-                    ("$ git clone https://github.com/app/server", (0, 255, 136)),
-                    ("$ python -m http.server 8080", (0, 255, 136)),
-                    ("[⚡] Serving HTTP on 0.0.0.0 port 8080...", (130, 215, 170)),
-                    ("$ ssh admin@production-cloud", (0, 255, 136)),
-                    ("Welcome to Ubuntu 26.04 LTS (GNU/Linux)", (190, 215, 240)),
-                    ("System load: 0.12, Memory: 64% used", (140, 165, 195))
+                    ("$ git clone https://github.com/app/server", (56, 189, 248)),
+                    ("$ python -m http.server 8080", (56, 189, 248)),
+                    ("[⚡] Serving HTTP on 0.0.0.0 port 8080...", (148, 163, 184)),
+                    ("$ ssh admin@production-cloud", (56, 189, 248)),
+                    ("Welcome to Ubuntu 26.04 LTS (GNU/Linux)", (203, 213, 225)),
+                    ("System load: 0.12, Memory: 64% used", (148, 163, 184))
                 ]
 
             ty = term_y + 60
@@ -394,7 +394,7 @@ class SlideRenderer:
                 by += 16
 
     def _render_terminal(self, img: Image.Image, cards: List[Dict[str, Any]], heading: str):
-        ib = self.draw_card_frame(img, (100, 180, self.width - 100, 900), "Terminal / Code Simulation", heading, border_color=(0, 255, 136, 200))
+        ib = self.draw_card_frame(img, (100, 180, self.width - 100, 900), "Terminal / Code Simulation", heading, border_color=(51, 65, 85, 200))
         tdraw = ImageDraw.Draw(img)
         ty = ib[1] + 10
         fta_t, fen_t = get_fonts(20, bold=True)
@@ -403,7 +403,7 @@ class SlideRenderer:
         for card in cards:
             title = card.get("title", "")
             if title:
-                draw_mixed_line(tdraw, ib[0] + 10, ty, f"$ {title}", (0, 255, 136), fta_t, fen_t)
+                draw_mixed_line(tdraw, ib[0] + 10, ty, f"$ {title}", (56, 189, 248), fta_t, fen_t)
                 ty += 34
             for b in card.get("bullets", []):
                 draw_mixed_line(tdraw, ib[0] + 25, ty, f"> {b}", (200, 225, 255), fta_term, fen_term)

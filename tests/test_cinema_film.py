@@ -25,7 +25,7 @@ class TestCinemaFilmEngine(unittest.TestCase):
             self.assertEqual(img.size, (300, 400))
 
     def test_environment_rendering(self):
-        sets = ["cyberpunk_city", "quantum_lab", "deep_space", "digital_matrix"]
+        sets = ["modern_studio", "executive_boardroom", "cyberpunk_city", "quantum_lab", "deep_space", "digital_matrix"]
         for s in sets:
             img = EnvironmentRenderer.render_set(s, w=640, h=360)
             self.assertIsInstance(img, Image.Image)
@@ -363,6 +363,94 @@ class TestCinemaFilmEngine(unittest.TestCase):
         annotated = DramaTensionCurve.calculate_tension_curve(scenes)
         self.assertEqual(len(annotated), 5)
         self.assertTrue(annotated[3]["tension_score"] >= annotated[0]["tension_score"])
+
+    def test_steady_camera_and_clean_color_palette(self):
+        from iram_video.real_compiler import RealVideoCompiler
+        from iram_video.renderer import SlideRenderer
+        from iram_video.shotcraft import SHOT_RECIPES
+        from iram_video.subtitles import SUBTITLE_PALETTES
+
+        # Verify RealVideoCompiler defaults to steady camera
+        compiler = RealVideoCompiler(Path("/tmp"), is_shorts=False)
+        self.assertTrue(compiler.steady_camera)
+
+        # Verify shot recipes have subtle steady zoom factor <= 1.05
+        hero_filter = SHOT_RECIPES["hero_reveal"]["ffmpeg_filter"]
+        self.assertIn("1.03", hero_filter)
+        self.assertNotIn("1.25", hero_filter)
+
+        # Verify SlideRenderer defaults to clean slate and corporate blue, not neon cyan
+        sr = SlideRenderer()
+        self.assertNotEqual(sr.accent_color[:3], (0, 229, 255))
+        self.assertEqual(sr.accent_color[:3], (59, 130, 246))
+
+        # Verify subtitles have clean corporate palettes
+        self.assertIn("blue", SUBTITLE_PALETTES)
+        self.assertIn("slate", SUBTITLE_PALETTES)
+
+    def test_soundscape_advisor(self):
+        from iram_video.soundscape import SoundscapeAdvisor
+        advice = SoundscapeAdvisor.advise_soundscape("Documentary about modern autonomous AI systems")
+        self.assertIsInstance(advice, dict)
+        self.assertIn("tempo_bpm", advice)
+        self.assertTrue(50 <= advice["tempo_bpm"] <= 140)
+        self.assertIn("foley_cues", advice)
+        self.assertIn("bgm_style", advice)
+        self.assertIn("bgm_mood", advice)
+        self.assertIn("instruments", advice)
+        self.assertTrue(len(advice["foley_cues"]) >= 1)
+
+    def test_mcp_server_protocol(self):
+        from iram_video.mcp_server import MCPServer
+        server = MCPServer()
+
+        # 1. Test initialize
+        init_req = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        init_res = server.handle_request(init_req)
+        self.assertEqual(init_res["id"], 1)
+        self.assertEqual(init_res["result"]["serverInfo"]["name"], "iram-video")
+
+        # 2. Test tools/list
+        list_req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+        list_res = server.handle_request(list_req)
+        tools = list_res["result"]["tools"]
+        tool_names = [t["name"] for t in tools]
+        self.assertIn("create_video", tool_names)
+        self.assertIn("extend_video", tool_names)
+        self.assertIn("suggest_soundscape", tool_names)
+        self.assertIn("search_stock_broll", tool_names)
+        self.assertIn("render_metric_card", tool_names)
+
+        # 3. Test tools/call suggest_soundscape
+        call_req = {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "suggest_soundscape",
+                "arguments": {"scene_prompt": "An executive boardroom discussing quarterly tech growth"}
+            }
+        }
+        call_res = server.handle_request(call_req)
+        self.assertEqual(call_res["id"], 3)
+        self.assertFalse(call_res["result"].get("isError", False))
+        content_txt = call_res["result"]["content"][0]["text"]
+        import json
+        parsed_soundscape = json.loads(content_txt)
+        self.assertIn("tempo_bpm", parsed_soundscape)
+
+    def test_pexels_orientation_support(self):
+        from iram_video.b_roll import MediaFetcher
+        # Ensure search_pexels accepts orientation and doesn't crash without credentials
+        results_landscape = MediaFetcher.search_pexels("coding", require_video=True, orientation="landscape")
+        self.assertIsInstance(results_landscape, list)
+        results_portrait = MediaFetcher.search_pexels("coding", require_video=True, orientation="portrait")
+        self.assertIsInstance(results_portrait, list)
+
+    def test_extend_video_api(self):
+        from iram_video.ai_video import AIVideoEngine
+        self.assertTrue(hasattr(AIVideoEngine, "extend_video"))
+        self.assertTrue(callable(AIVideoEngine.extend_video))
 
 if __name__ == "__main__":
     unittest.main()
