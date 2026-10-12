@@ -205,9 +205,12 @@ class TestCinemaFilmEngine(unittest.TestCase):
 
     def test_motion_canvas_rendering(self):
         from iram_video.motion_canvas import MotionCanvas, classify_semantic_beat
+        from iram_video.b_roll import MediaFetcher
         with tempfile.TemporaryDirectory() as td:
             out_metric = Path(td) / "metric.mp4"
             out_route = Path(td) / "route.mp4"
+            out_code = Path(td) / "code.mp4"
+            out_frame = Path(td) / "frame.jpg"
 
             b_m = classify_semantic_beat("116 கி.மீ மற்றும் 118 நிலையங்கள்")
             MotionCanvas.render_metric_card(b_m, out_metric, duration=1.0)
@@ -218,6 +221,17 @@ class TestCinemaFilmEngine(unittest.TestCase):
             MotionCanvas.render_route_map(b_r, out_route, duration=1.0)
             self.assertTrue(out_route.exists())
             self.assertTrue(out_route.stat().st_size > 1000)
+
+            b_c = classify_semantic_beat("Modern Java and Spring Boot microservices with virtual threads")
+            self.assertEqual(b_c["beat_type"], "code_card")
+            MotionCanvas.render_code_card(b_c, out_code, duration=1.0)
+            self.assertTrue(out_code.exists())
+            self.assertTrue(out_code.stat().st_size > 1000)
+
+            # Test clean documentary frame generation (editorial typography & code window, NO spirals)
+            MediaFetcher.create_clean_documentary_frame("Modern Java Spring Architecture", out_frame)
+            self.assertTrue(out_frame.exists())
+            self.assertTrue(out_frame.stat().st_size > 5000)
 
     def test_sentence_boundary_extraction_from_words(self):
         from iram_video.voice import extract_sentence_boundaries_from_words

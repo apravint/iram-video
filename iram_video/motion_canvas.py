@@ -152,7 +152,22 @@ def classify_semantic_beat(phrase: str, global_topic: str = "") -> Dict[str, Any
                 "phrase": text
             }
 
-    # 3. Default: Real Media (curated authentic B-roll or AI video)
+    # 3. Code & Technical Architecture Card Detection
+    code_triggers = [
+        "java", "spring boot", "springboot", "virtual thread", "project loom",
+        "graalvm", "microservice", "controller", "dependency injection",
+        "syntax", "rest api", "xml configuration", "backend code",
+        "concurrency", "thread pool", "garbage collection"
+    ]
+    if any(k in t_low for k in code_triggers) or (top_low and any(k in top_low for k in ["java", "spring", "code", "programming", "software"]) and any(k in t_low for k in ["performance", "memory", "compile", "scale", "system", "application", "cloud", "service"])):
+        return {
+            "beat_type": "code_card",
+            "headline": text[:60],
+            "phrase": text,
+            "topic": "java" if ("java" in t_low or "spring" in t_low or "java" in top_low) else "software"
+        }
+
+    # 4. Default: Real Media (curated authentic B-roll or AI video)
     return {
         "beat_type": "real_media",
         "phrase": text
@@ -483,3 +498,140 @@ class MotionCanvas:
             raise
 
         return out_path
+
+    @classmethod
+    def render_code_card(
+        cls,
+        beat: Dict[str, Any],
+        out_path: Path,
+        duration: float = 4.0,
+        is_shorts: bool = False,
+    ) -> Path:
+        """
+        Renders a broadcast-quality animated code editor / architecture card with syntax highlighting
+        and smooth progressive typing/highlight animation.
+        """
+        w = 1080 if is_shorts else 1920
+        h = 1920 if is_shorts else 1080
+        fps = 30
+        total_frames = max(30, int(round(duration * fps)))
+
+        c_bg = (15, 23, 42)
+        c_grid = (24, 34, 53)
+        c_white = (248, 250, 252)
+        c_blue = (59, 130, 246)
+        c_sky = (56, 189, 248)
+        c_purple = (168, 85, 247)
+        c_green = (34, 197, 94)
+        c_amber = (245, 158, 11)
+        c_gray = (148, 163, 184)
+        c_dim = (71, 85, 105)
+
+        card_x1, card_y1 = (80, 480) if is_shorts else (240, 160)
+        card_x2, card_y2 = (1000, 1440) if is_shorts else (1680, 920)
+
+        fta_head, fen_head = get_fonts(26 if is_shorts else 32, bold=True)
+        fta_code, fen_code = get_fonts(18 if is_shorts else 22, bold=False)
+        fta_sm, fen_sm = get_fonts(16 if is_shorts else 18, bold=False)
+
+        topic = beat.get("topic", "java")
+        phrase = beat.get("phrase", "Enterprise Java Architecture")
+
+        if topic == "java":
+            code_lines = [
+                ("@SpringBootApplication", c_purple),
+                ("public class EnterpriseService {", c_white),
+                ("    @Bean", c_purple),
+                ("    public TomcatProtocolHandlerCustomizer<?> protocol() {", c_sky),
+                ("        return p -> p.setExecutor(Executors.newVirtualThreadPerTaskExecutor());", c_gray),
+                ("    }", c_white),
+                ("    @GetMapping(\"/api/v1/scale\")", c_purple),
+                ("    public ResponseEntity<Metrics> getMetrics() {", c_sky),
+                ("        return ResponseEntity.ok(Metrics.virtualThreadScale());", c_gray),
+                ("    }", c_white),
+                ("}", c_white),
+            ]
+            win_title = "EnterpriseService.java"
+        else:
+            code_lines = [
+                ("services:", c_purple),
+                ("  api-gateway:", c_white),
+                ("    image: enterprise/gateway:latest", c_sky),
+                ("    deploy: { replicas: 8 }", c_gray),
+                ("  spring-microservice:", c_white),
+                ("    image: enterprise/core-engine:v3", c_sky),
+                ("    environment:", c_purple),
+                ("      - JAVA_OPTS=-XX:+UseZGC -XX:+EnableVirtualThreads", c_amber),
+                ("    healthcheck: { test: [\"CMD\", \"curl\", \"-f\", \"/actuator/health\"] }", c_green),
+            ]
+            win_title = "docker-compose.architecture.yml"
+
+        proc = cls._create_ffmpeg_writer(out_path, w, h, fps)
+
+        try:
+            for frame_idx in range(total_frames):
+                p = frame_idx / float(total_frames - 1) if total_frames > 1 else 1.0
+                active_lines_count = max(1, min(len(code_lines), int(p * (len(code_lines) + 2))))
+
+                img = Image.new("RGB", (w, h), c_bg)
+                draw = ImageDraw.Draw(img)
+
+                # Background grid
+                grid_step = 60 if is_shorts else 80
+                for gx in range(0, w, grid_step):
+                    draw.line([(gx, 0), (gx, h)], fill=c_grid, width=1)
+                for gy in range(0, h, grid_step):
+                    draw.line([(0, gy), (w, gy)], fill=c_grid, width=1)
+
+                # Top brand line
+                draw.rectangle([(0, 0), (w, 6)], fill=c_blue)
+
+                # Headline
+                hl_y = 120 if is_shorts else 80
+                hl_text = (phrase[:55] + "...") if len(phrase) > 55 else phrase
+                draw_mixed_line(draw, card_x1, hl_y, hl_text, c_white, fta_head, fen_head)
+
+                # Card background
+                draw.rounded_rectangle(
+                    [(card_x1, card_y1), (card_x2, card_y2)],
+                    radius=12,
+                    fill=(20, 29, 44),
+                    outline=(51, 65, 85),
+                    width=2
+                )
+
+                # macOS window dots
+                draw.ellipse([(card_x1 + 24, card_y1 + 18), (card_x1 + 36, card_y1 + 30)], fill=(239, 68, 68))
+                draw.ellipse([(card_x1 + 44, card_y1 + 18), (card_x1 + 56, card_y1 + 30)], fill=(245, 158, 11))
+                draw.ellipse([(card_x1 + 64, card_y1 + 18), (card_x1 + 76, card_y1 + 30)], fill=(34, 197, 94))
+                draw_mixed_line(draw, card_x1 + 90, card_y1 + 14, win_title, c_gray, fta_sm, fen_sm)
+                draw.line([(card_x1, card_y1 + 44), (card_x2, card_y1 + 44)], fill=(30, 41, 59), width=1)
+
+                # Code content
+                cy = card_y1 + 65
+                line_h = 32 if is_shorts else 38
+                for idx, (txt, col) in enumerate(code_lines[:active_lines_count]):
+                    if cy + line_h > card_y2 - 35:
+                        break
+                    draw_mixed_line(draw, card_x1 + 28, cy, f"{idx+1:2d}", c_dim, fta_code, fen_code)
+                    draw_mixed_line(draw, card_x1 + 75, cy, txt, col, fta_code, fen_code)
+                    cy += line_h
+
+                # Blinking cursor on active line
+                if (frame_idx // 8) % 2 == 0 and cy <= card_y2 - 25:
+                    cursor_x = card_x1 + 75
+                    draw.rectangle([(cursor_x, cy - 2), (cursor_x + 10, cy + 20)], fill=c_sky)
+
+                # Status pill at bottom
+                status_txt = "● RUNNING: JVM 21+ • VIRTUAL THREADS ACTIVE"
+                draw_mixed_line(draw, card_x1 + 28, card_y2 - 36, status_txt, c_green, fta_sm, fen_sm)
+
+                proc.stdin.write(img.tobytes())
+
+            proc.stdin.close()
+            proc.wait()
+            return out_path
+        except Exception:
+            if proc.poll() is None:
+                proc.kill()
+            raise

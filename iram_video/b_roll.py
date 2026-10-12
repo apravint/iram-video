@@ -12,12 +12,13 @@ from .motion_canvas import classify_semantic_beat
 # Allow Pillow to downscale ultra-high resolution public domain photography (> 89 megapixels)
 Image.MAX_IMAGE_PIXELS = None
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 IramVideo/2.0"
+USER_AGENT = "IramVideo/2.0 (https://github.com/apravint/iram-video; apravint@gmail.com)"
 
 NEGATIVE_NOISE_TERMS = [
     "bird", "tree", "plant", "forest", "florestal", "fruit", "animal", "cartoon",
     "graffiti", "anime", "toy", "nagaokakyo", "happy bus", "doll", "drawing",
-    "illustration", "sketch", "comic", "painting", "clipart", "costume", "cosplay", "mask"
+    "illustration", "sketch", "comic", "painting", "clipart", "costume", "cosplay", "mask",
+    "flower", "season", "festival", "autumn", "summer", "winter", "blossom", "tulip", "cherry blossom"
 ]
 
 NEGATIVE_GEO_NOISE = [
@@ -158,7 +159,7 @@ class MediaFetcher:
                     h = ii.get("height", 0)
                     mime = ii.get("mime", "")
 
-                    if (mime in ["image/jpeg", "image/png", "image/webp"] or mime.startswith("video/")) and (w >= 1000 or h >= 700):
+                    if (mime in ["image/jpeg", "image/png", "image/webp"] or mime.startswith("video/")) and (w >= 480 or h >= 360):
                         cls._topic_media_pool.append({
                             "type": "video" if mime.startswith("video/") else "image",
                             "url": u,
@@ -339,7 +340,7 @@ class MediaFetcher:
                             "height": h,
                             "title": title
                         })
-                    elif mime in ["image/jpeg", "image/png", "image/webp"] and (w >= 1000 or h >= 700):
+                    elif mime in ["image/jpeg", "image/png", "image/webp"] and (w >= 480 or h >= 360):
                         results.append({
                             "type": "image",
                             "url": media_url,
@@ -578,19 +579,127 @@ class MediaFetcher:
         """Finds and downloads real B-roll video or photo for a scene."""
         return cls.fetch_media_for_beat(query, out_dir, f"scene_{scene_idx:02d}", global_topic=global_topic)
 
-    @staticmethod
-    def create_clean_documentary_frame(title: str, out_path: Path):
-        """Generates a warm, cinematic editorial visual for documentary YouTube videos."""
-        img = Image.new("RGBA", (1920, 1080), (18, 22, 28, 255))
+    @classmethod
+    def create_clean_documentary_frame(
+        cls,
+        title: str,
+        out_path: Path,
+        beat_data: Optional[Dict[str, Any]] = None,
+        is_shorts: bool = False
+    ):
+        """
+        Renders a broadcast-quality editorial documentary slide with clean typography,
+        structured technical cards or code snippets, and modern enterprise palette (NO spirals/concentric ellipses).
+        """
+        w, h = (1080, 1920) if is_shorts else (1920, 1080)
+        img = Image.new("RGBA", (w, h), (15, 23, 42, 255))  # Deep Slate-900
         draw = ImageDraw.Draw(img)
 
-        for r in range(1080, 0, -20):
-            alpha = int(45 * (1.0 - (r / 1080.0)))
-            draw.ellipse(
-                [(960 - int(r * 1.4), 540 - r), (960 + int(r * 1.4), 540 + r)],
-                outline=(35, 42, 52, alpha),
-                width=18
-            )
+        # 1. Subtle architectural background grid (clean, modern tech pattern)
+        grid_color = (24, 34, 53, 160)
+        grid_step = 60 if is_shorts else 80
+        for x in range(0, w, grid_step):
+            draw.line([(x, 0), (x, h)], fill=grid_color, width=1)
+        for y in range(0, h, grid_step):
+            draw.line([(0, y), (w, y)], fill=grid_color, width=1)
 
-        draw.rectangle([(0, 520), (1920, 560)], fill=(30, 38, 48, 60))
+        # Subtle horizontal top brand accent line in cobalt blue
+        draw.rectangle([(0, 0), (w, 6)], fill=(59, 130, 246, 255))
+
+        # Fonts
+        from .renderer import get_fonts, draw_mixed_line, wrap_text
+        fta_lg, fen_lg = get_fonts(36 if is_shorts else 44, bold=True)
+        fta_md, fen_md = get_fonts(24 if is_shorts else 28, bold=True)
+        fta_sm, fen_sm = get_fonts(18 if is_shorts else 20, bold=False)
+        fta_code, fen_code = get_fonts(20 if is_shorts else 22, bold=False)
+
+        # 2. Category badge
+        badge_y = 60 if not is_shorts else 120
+        badge_text = "ENTERPRISE ARCHITECTURE & ENGINEERING"
+        draw.rounded_rectangle(
+            [(80, badge_y), (80 + 440, badge_y + 36)],
+            radius=6,
+            fill=(30, 41, 59, 220),
+            outline=(59, 130, 246, 200),
+            width=1
+        )
+        draw_mixed_line(draw, 96, badge_y + 8, badge_text, (56, 189, 248), fta_sm, fen_sm)
+
+        # 3. Clean headline
+        headline = (title or "System Architecture").strip()
+        headline = re.sub(r'[\r\n\t]+', ' ', headline)[:100]
+        lines = wrap_text(headline, fta_lg, fen_lg, 1200 if not is_shorts else 800, draw)
+        title_y = badge_y + 55
+        for line in lines[:2]:
+            draw_mixed_line(draw, 80, title_y, line, (248, 250, 252), fta_lg, fen_lg)
+            title_y += 54
+
+        # 4. Main Presentation Container Card
+        card_x = 80
+        card_y = title_y + 25
+        card_w = w - 160
+        card_h = (h - card_y - 80)
+
+        # Draw glassmorphism card
+        draw.rounded_rectangle(
+            [(card_x, card_y), (card_x + card_w, card_y + card_h)],
+            radius=12,
+            fill=(20, 29, 44, 240),
+            outline=(51, 65, 85, 255),
+            width=2
+        )
+
+        # Window controls (macOS style dots)
+        draw.ellipse([(card_x + 24, card_y + 20), (card_x + 36, card_y + 32)], fill=(239, 68, 68))
+        draw.ellipse([(card_x + 44, card_y + 20), (card_x + 56, card_y + 32)], fill=(245, 158, 11))
+        draw.ellipse([(card_x + 64, card_y + 20), (card_x + 76, card_y + 32)], fill=(34, 197, 94))
+
+        # Window title bar
+        win_title = "EnterpriseApplication.java" if any(k in headline.lower() for k in ["java", "spring", "code", "virtual", "thread"]) else "SystemArchitecture.yaml"
+        draw_mixed_line(draw, card_x + 90, card_y + 16, win_title, (148, 163, 184), fta_sm, fen_sm)
+        draw.line([(card_x, card_y + 48), (card_x + card_w, card_y + 48)], fill=(30, 41, 59), width=1)
+
+        # 5. Content inside card
+        content_y = card_y + 70
+        is_code_topic = any(k in headline.lower() for k in ["java", "spring", "code", "thread", "virtual", "compile", "rest", "api", "loom", "graalvm"])
+
+        if is_code_topic:
+            # Render syntax-highlighted code block with line numbers
+            code_lines = [
+                ("@SpringBootApplication", (168, 85, 247)),
+                ("public class EnterpriseService {", (248, 250, 252)),
+                ("    @Bean", (168, 85, 247)),
+                ("    public TomcatProtocolHandlerCustomizer<?> protocolHandler() {", (56, 189, 248)),
+                ("        return protocol -> protocol.setExecutor(Executors.newVirtualThreadPerTaskExecutor());", (148, 163, 184)),
+                ("    }", (248, 250, 252)),
+                ("    @GetMapping(\"/api/v1/throughput\")", (168, 85, 247)),
+                ("    public ResponseEntity<Metrics> getMetrics() {", (56, 189, 248)),
+                ("        return ResponseEntity.ok(Metrics.highPerformanceScale());", (148, 163, 184)),
+                ("    }", (248, 250, 252)),
+                ("}", (248, 250, 252)),
+            ]
+            for idx, (c_txt, c_col) in enumerate(code_lines):
+                if content_y + 34 > card_y + card_h - 30:
+                    break
+                draw_mixed_line(draw, card_x + 30, content_y, f"{idx+1:2d}", (71, 85, 105), fta_code, fen_code)
+                draw_mixed_line(draw, card_x + 75, content_y, c_txt, c_col, fta_code, fen_code)
+                content_y += 34
+        else:
+            pillars = [
+                ("⚡ High-Throughput Processing", "Massive concurrency with low memory overhead per active connection.", (56, 189, 248)),
+                ("🛡️ Cloud-Native Resilience", "Automated circuit breakers, zero-downtime scaling, and containerized health checks.", (34, 197, 94)),
+                ("🚀 Production-Ready Observability", "Distributed tracing, unified metrics, and enterprise-grade telemetry out of the box.", (245, 158, 11)),
+            ]
+            for p_title, p_desc, p_color in pillars:
+                if content_y + 70 > card_y + card_h - 20:
+                    break
+                draw.rectangle([(card_x + 30, content_y + 4), (card_x + 36, content_y + 28)], fill=p_color)
+                draw_mixed_line(draw, card_x + 48, content_y, p_title, (248, 250, 252), fta_md, fen_md)
+                draw_mixed_line(draw, card_x + 48, content_y + 36, p_desc, (148, 163, 184), fta_sm, fen_sm)
+                content_y += 85
+
+        # 6. Bottom footer tag
+        footer_text = "IRAM FILM STUDIO • HIGH PERFORMANCE ENTERPRISE COMPUTING"
+        draw_mixed_line(draw, 80, h - 45, footer_text, (100, 116, 139), fta_sm, fen_sm)
+
         img.convert("RGB").save(out_path, quality=95)

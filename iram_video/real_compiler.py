@@ -67,6 +67,22 @@ class RealVideoCompiler:
             ]
             subprocess.run(cmd_mux, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return out_shot
+        elif beat_type == "code_card":
+            tmp_video = self.shots_dir / f"tmp_single_{scene_idx:02d}.mp4"
+            MotionCanvas.render_code_card(beat, tmp_video, duration=duration, is_shorts=self.is_shorts)
+            cmd_mux = [
+                "ffmpeg", "-y",
+                "-i", str(tmp_video),
+                "-i", str(audio_file),
+                "-map", "0:v",
+                "-map", "1:a",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-t", f"{duration:.3f}",
+                str(out_shot)
+            ]
+            subprocess.run(cmd_mux, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return out_shot
 
         media_path = AIVideoEngine.fetch_or_generate_beat_media(
             beat, self.broll_dir, f"scene_{scene_idx:02d}", is_shorts=self.is_shorts, provider=self.provider, global_topic=self.global_topic
@@ -169,7 +185,15 @@ class RealVideoCompiler:
                 beat_clips.append(beat_clip_path)
                 continue
 
-            # Route 3: Real Curated 4K B-Roll / AI Generative Video
+            # Route 3: Programmatic Code & Architecture Card
+            if beat_type == "code_card":
+                MotionCanvas.render_code_card(
+                    beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts
+                )
+                beat_clips.append(beat_clip_path)
+                continue
+
+            # Route 4: Real Curated 4K B-Roll / AI Generative Video
             media_path = AIVideoEngine.fetch_or_generate_beat_media(
                 beat, self.broll_dir, f"{scene_idx:02d}_{b_idx:02d}", is_shorts=self.is_shorts, provider=self.provider, global_topic=self.global_topic
             )
