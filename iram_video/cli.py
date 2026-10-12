@@ -20,6 +20,7 @@ from .shotcraft import SHOT_RECIPES, get_shot_recipe
 from .avatar import AvatarEngine
 from .brag import BragHarvester, ViralHookGenerator
 from .drama import CharacterAnchorRegistry, DramaTensionCurve
+from .ai_video import AIVideoEngine
 
 def slugify(text: str) -> str:
     clean = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip().lower()
@@ -178,7 +179,8 @@ def main():
         is_real = True
 
     p_low = args.prompt.lower()
-    if not is_film and not is_cinema and (args.real or any(k in p_low for k in ["real", "documentary", "history", "nature", "science", "explain", "how to", "why"])):
+    doc_triggers = [r"\breal\b", r"\bdocumentary\b", r"\bhistory\b", r"\bnature\b", r"\bscience\b", r"\bhow to\b"]
+    if not is_film and not is_cinema and (args.real or any(re.search(pat, p_low) for pat in doc_triggers)):
         is_real = True
 
     # Subtitles disabled by default unless explicitly requested
@@ -191,9 +193,9 @@ def main():
             character = None
         elif "rust" in p_low:
             character = "ferris"
-        elif "go" in p_low or "golang" in p_low:
+        elif bool(re.search(r"\bgo\b", p_low)) or "golang" in p_low:
             character = "gopher"
-        elif "girl" in p_low or "host" in p_low or "presenter" in p_low:
+        elif any(k in p_low for k in ["girl", "host", "presenter"]):
             character = "presenter"
         else:
             character = "robot"

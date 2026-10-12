@@ -93,7 +93,6 @@ class AIVideoEngine:
                     elif "404" in err_msg or "NOT_FOUND" in err_msg:
                         continue
                     else:
-                        cls._veo_quota_exhausted = True
                         print(f"   ⚠️ [Google Veo Notice] {err_msg[:90]}")
                         break
         except Exception as e:
@@ -136,12 +135,15 @@ class AIVideoEngine:
             data = resp.json()
             status_url = data.get("status_url")
             response_url = data.get("response_url")
+            poll_endpoint = status_url or response_url
+            if not poll_endpoint:
+                return None
 
             # Poll for completion
             start_t = time.time()
             while time.time() - start_t < 90:
                 time.sleep(5)
-                check = requests.get(status_url or response_url, headers=headers, timeout=10)
+                check = requests.get(poll_endpoint, headers=headers, timeout=10)
                 if check.status_code == 200:
                     cdata = check.json()
                     status = cdata.get("status")
@@ -252,6 +254,8 @@ class AIVideoEngine:
             resp = requests.post(endpoint, json=payload, headers=headers, timeout=15)
             if resp.status_code in (200, 201):
                 poll_url = resp.json().get("urls", {}).get("get")
+                if not poll_url:
+                    return None
                 start_t = time.time()
                 while time.time() - start_t < 90:
                     time.sleep(5)
@@ -299,6 +303,8 @@ class AIVideoEngine:
             resp = requests.post(endpoint, json=payload, headers=headers, timeout=15)
             if resp.status_code in (200, 201):
                 poll_url = resp.json().get("urls", {}).get("get")
+                if not poll_url:
+                    return None
                 start_t = time.time()
                 while time.time() - start_t < 90:
                     time.sleep(5)
@@ -345,12 +351,16 @@ class AIVideoEngine:
             if resp.status_code in (200, 201, 202):
                 data = resp.json()
                 s_url = data.get("status_url") or data.get("response_url")
+                if not s_url:
+                    return None
                 start_t = time.time()
                 while time.time() - start_t < 30:
                     time.sleep(2)
                     check = requests.get(s_url, headers=headers, timeout=10)
                     if check.status_code == 200:
                         cdata = check.json()
+                        if cdata.get("status") == "FAILED":
+                            return None
                         img_url = cdata.get("images", [{}])[0].get("url")
                         if img_url:
                             i_resp = requests.get(img_url, timeout=20)
@@ -428,7 +438,7 @@ class AIVideoEngine:
                 return res
 
         # Tier 6: NVIDIA Sana Ultra-Fast Keyframe DiT
-        if prov in ("sana", "nvlabs"):
+        if prov in ("auto", "sana", "nvlabs"):
             target_keyframe = out_dir / f"beat_{beat_id}_sana.jpg"
             res_img = cls.generate_keyframe_with_sana(ai_prompt, target_keyframe, is_shorts)
             if res_img:

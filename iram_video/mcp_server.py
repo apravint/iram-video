@@ -181,8 +181,10 @@ class MCPServer:
             return {"status": "ok", "out_path": str(out_p), "duration": dur}
 
         elif tool_name == "extend_video":
-            prev_v = Path(args["previous_video"])
-            out_p = Path(args["output_path"])
+            prev_v = Path(args["previous_video"]).resolve()
+            if not prev_v.exists():
+                raise FileNotFoundError(f"Previous video not found: {prev_v}")
+            out_p = Path(args["output_path"]).resolve()
             prompt = args["prompt"]
             dur = float(args.get("duration", 4.0))
             is_sh = bool(args.get("is_shorts", False))
@@ -192,8 +194,8 @@ class MCPServer:
         elif tool_name == "create_video":
             import subprocess
             prompt = args["prompt"]
-            out_p = args.get("output_path", "/tmp/mcp_generated_video.mp4")
-            cmd = ["python3", "-m", "iram_video.cli", prompt, "-o", out_p]
+            out_p = Path(args.get("output_path", "/tmp/mcp_generated_video.mp4")).resolve()
+            cmd = [sys.executable, "-m", "iram_video.cli", "-o", str(out_p)]
             if args.get("is_shorts"):
                 cmd.append("--shorts")
             if args.get("is_real", True):
@@ -202,13 +204,22 @@ class MCPServer:
                 cmd.extend(["--music", args["music"]])
             if args.get("steady_camera", True):
                 cmd.append("--steady")
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            return {
-                "status": "ok" if proc.returncode == 0 else "error",
-                "output_video": out_p,
-                "stdout": proc.stdout[-500:],
-                "stderr": proc.stderr[-500:] if proc.returncode != 0 else ""
-            }
+            cmd.extend(["--", prompt])
+            try:
+                proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600)
+                return {
+                    "status": "ok" if proc.returncode == 0 else "error",
+                    "output_video": str(out_p),
+                    "stdout": proc.stdout[-500:],
+                    "stderr": proc.stderr[-500:] if proc.returncode != 0 else ""
+                }
+            except subprocess.TimeoutExpired:
+                return {
+                    "status": "error",
+                    "output_video": str(out_p),
+                    "stdout": "",
+                    "stderr": "Video creation timed out after 600 seconds"
+                }
         else:
             raise ValueError(f"Unknown tool: {tool_name}")
 

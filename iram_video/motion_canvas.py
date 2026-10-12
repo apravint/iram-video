@@ -323,7 +323,20 @@ class MotionCanvas:
         except Exception:
             if proc.poll() is None:
                 proc.kill()
+            proc.wait()
             raise
+        finally:
+            if proc.stdin and not proc.stdin.closed:
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                proc.wait()
 
         return out_path
 
@@ -495,7 +508,20 @@ class MotionCanvas:
         except Exception:
             if proc.poll() is None:
                 proc.kill()
+            proc.wait()
             raise
+        finally:
+            if proc.stdin and not proc.stdin.closed:
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                proc.wait()
 
         return out_path
 
@@ -630,8 +656,22 @@ class MotionCanvas:
 
             proc.stdin.close()
             proc.wait()
-            return out_path
         except Exception:
             if proc.poll() is None:
                 proc.kill()
+            proc.wait()
             raise
+        finally:
+            if proc.stdin and not proc.stdin.closed:
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                proc.wait()
+
+        return out_path

@@ -1,4 +1,3 @@
-import math
 from pathlib import Path
 from typing import List, Dict, Any
 from .renderer import is_tamil_text
@@ -24,7 +23,8 @@ SUBTITLE_PALETTES = {
     "hormozi": "\\c&H0000FFFF&",    # Yellow
     "neon-cyan": "\\c&H00FFFF00&",  # Cyan
     "neon-green": "\\c&H0000FF00&", # Emerald
-    "purple": "\\c&H00FF00FF&",     # Magenta
+    "magenta": "\\c&H00FF00FF&",    # Magenta / Fuchsia
+    "purple": "\\c&H00D87093&",     # Soft Purple / Lavender
 }
 
 class KineticSubtitleGenerator:

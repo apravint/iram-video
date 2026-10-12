@@ -85,12 +85,17 @@ class FilmCompiler:
 
         if is_char1_speaking:
             # Char 2 is idle on the right
-            char2_idle = Image.open(self.sprites_dir / "c2_idle.png").transpose(Image.FLIP_LEFT_RIGHT)
-            bg_img.paste(char2_idle, (1320, 540), char2_idle)
+            c2_file = self.sprites_dir / "c2_idle.png"
+            if c2_file.exists():
+                with Image.open(c2_file) as c2_im:
+                    char2_idle = c2_im.transpose(Image.FLIP_LEFT_RIGHT)
+                    bg_img.paste(char2_idle, (1320, 540), char2_idle)
         else:
             # Char 1 is idle on the left
-            char1_idle = Image.open(self.sprites_dir / "c1_idle.png")
-            bg_img.paste(char1_idle, (260, 520), char1_idle)
+            c1_file = self.sprites_dir / "c1_idle.png"
+            if c1_file.exists():
+                with Image.open(c1_file) as c1_im:
+                    bg_img.paste(c1_im, (260, 520), c1_im)
 
         # Draw Cinema Letterbox bars (2.39:1 Hollywood Scope)
         draw = ImageDraw.Draw(bg_img)
@@ -306,6 +311,9 @@ class FilmCompiler:
                     emotion=emotion
                 )
                 shot_clips.append(shot_clip)
+
+        if not shot_clips:
+            raise ValueError(f"Screenplay for '{film_title}' contains no dialogue lines to render.")
 
         # Render End Credits
         credits = screenplay.get("credits", [

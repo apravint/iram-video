@@ -138,7 +138,7 @@ class VideoCompiler:
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return out_clip
 
-    def compile(self, scenes: List[Dict[str, Any]], slide_paths: List[Path], bg_music: Path, final_output: Path, language: str = "en", burn_subtitles: bool = True, palette_key: str = "auto"):
+    def compile(self, scenes: List[Dict[str, Any]], slide_paths: List[Path], bg_music: Optional[Path], final_output: Path, language: str = "en", burn_subtitles: bool = True, palette_key: str = "auto"):
         clip_paths = []
         for scene, slide in zip(scenes, slide_paths):
             c = self.render_clip(scene, slide)
@@ -187,6 +187,14 @@ class VideoCompiler:
         filter_complex_list = []
         maps = []
 
+        if v_filters:
+            filter_complex_list.append(f"[0:v]{','.join(v_filters)}[vout]")
+            maps.extend(["-map", "[vout]"])
+            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p"]
+        else:
+            maps.extend(["-map", "0:v"])
+            video_codec_args = ["-c:v", "copy"]
+
         if bg_music and bg_music.exists():
             filter_complex_list.append(
                 f"[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[voice_master];"
@@ -206,33 +214,15 @@ class VideoCompiler:
         cmd_mix = [
             "ffmpeg", "-y",
             "-i", str(raw_concat),
-            *audio_inputs
-        ]
-
-        if v_filters:
-            cmd_mix.extend([
-                "-vf", ",".join(v_filters),
-                "-c:v", "libx264",
-                "-preset", "veryfast",
-                "-pix_fmt", "yuv420p"
-            ])
-            maps.insert(0, "-map")
-            maps.insert(1, "0:v")
-        else:
-            cmd_mix.extend(["-c:v", "copy"])
-            maps.insert(0, "-map")
-            maps.insert(1, "0:v")
-
-        if filter_complex_list:
-            cmd_mix.extend(["-filter_complex", ";".join(filter_complex_list)])
-
-        cmd_mix.extend([
+            *audio_inputs,
+            "-filter_complex", ";".join(filter_complex_list),
             *maps,
+            *video_codec_args,
             "-c:a", "aac",
             "-b:a", "320k",
             "-ar", "48000",
             "-movflags", "+faststart",
             str(final_output)
-        ])
+        ]
 
         subprocess.run(cmd_mix, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

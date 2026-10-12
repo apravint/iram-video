@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import base64
@@ -6,14 +7,14 @@ import mimetypes
 import threading
 import subprocess
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 from iram_video.soundscape import SoundscapeAdvisor
 
-RESOURCES_DIR = Path("/home/apravint/resources")
-OUTPUTS_DIR = Path("/home/apravint")
-UPLOAD_DIR = Path("/tmp/iram_uploads")
+RESOURCES_DIR = Path(os.getenv("IRAM_RESOURCES_DIR", "/home/apravint/resources"))
+OUTPUTS_DIR = Path(os.getenv("IRAM_OUTPUTS_DIR", "/home/apravint"))
+UPLOAD_DIR = Path(os.getenv("IRAM_UPLOAD_DIR", "/tmp/iram_uploads"))
 
 HTML_DASHBOARD = """<!DOCTYPE html>
 <html lang="en">
@@ -227,6 +228,13 @@ HTML_DASHBOARD = """<!DOCTYPE html>
   </main>
 
   <script>
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = String(str);
+      return div.innerHTML;
+    }
+
     async function loadResources() {
       try {
         const res = await fetch('/api/resources');
@@ -234,8 +242,8 @@ HTML_DASHBOARD = """<!DOCTYPE html>
         const sel = document.getElementById('jsonSelect');
         files.forEach(f => {
           const opt = document.createElement('option');
-          opt.value = f.path;
-          opt.textContent = f.name + ' (' + f.title + ')';
+          opt.value = f.name;
+          opt.textContent = f.name + (f.title && f.title !== f.name ? ' (' + f.title + ')' : '');
           sel.appendChild(opt);
         });
       } catch (e) {
@@ -256,15 +264,17 @@ HTML_DASHBOARD = """<!DOCTYPE html>
         list.forEach(v => {
           const item = document.createElement('div');
           item.className = 'recent-item';
+          const safeName = escapeHtml(v.filename);
+          const safeSize = Number(v.size_mb || 0).toFixed(2);
           item.innerHTML = `
-            <div class="recent-name" title="${v.filename}">🎬 ${v.filename}</div>
-            <div class="recent-size">${v.size_mb} MB</div>
+            <div class="recent-name" title="${safeName}">🎬 ${safeName}</div>
+            <div class="recent-size">${safeSize} MB</div>
           `;
           item.onclick = () => {
             const vp = document.getElementById('videoPlayer');
             vp.src = '/video/' + encodeURIComponent(v.filename);
             vp.play();
-            document.getElementById('videoMeta').textContent = v.filename + ' (' + v.size_mb + ' MB)';
+            document.getElementById('videoMeta').textContent = v.filename + ' (' + safeSize + ' MB)';
             const dl = document.getElementById('downloadBtn');
             dl.href = '/video/' + encodeURIComponent(v.filename);
             dl.style.display = 'inline';
@@ -419,6 +429,16 @@ HTML_DASHBOARD = """<!DOCTYPE html>
 """
 
 class VideoStudioHandler(BaseHTTPRequestHandler):
+    def end_headers(self):
+        # Inject standard security headers into every response
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data:;"
+        )
+        super().end_headers()
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -435,12 +455,13 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
             if RESOURCES_DIR.exists():
                 for f in sorted(RESOURCES_DIR.glob("*.json")):
                     try:
-                        with open(f, "r") as jf:
+                        with open(f, "r", encoding="utf-8") as jf:
                             data = json.load(jf)
                             title = data.get("title", f.name)
                     except Exception:
                         title = f.name
-                    items.append({"name": f.name, "path": str(f.resolve()), "title": title})
+                    # Never leak internal absolute paths to the client
+                    items.append({"name": f.name, "id": f.name, "title": title})
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -474,18 +495,36 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/video/"):
-            filename = path.replace("/video/", "")
-            target_file = OUTPUTS_DIR / filename
-            if not target_file.exists():
-                target_file = Path.cwd() / filename
+            raw_filename = path.replace("/video/", "")
+            safe_name = Path(raw_filename).name
+            if not safe_name or not (safe_name.endswith(".mp4") or safe_name.endswith(".webm")):
+                self.send_response(400)
+                self.end_headers()
+                return
 
-            if target_file.exists() and target_file.is_file():
-                file_size = target_file.stat().st_size
-                range_header = self.headers.get("Range")
-                if range_header:
+            candidate1 = (OUTPUTS_DIR / safe_name).resolve()
+            candidate2 = (Path.cwd() / safe_name).resolve()
+            target_file = None
+            if candidate1.exists() and candidate1.is_file() and str(candidate1).startswith(str(OUTPUTS_DIR.resolve())):
+                target_file = candidate1
+            elif candidate2.exists() and candidate2.is_file() and str(candidate2).startswith(str(Path.cwd().resolve())):
+                target_file = candidate2
+
+            if not target_file:
+                self.send_response(404)
+                self.end_headers()
+                return
+
+            file_size = target_file.stat().st_size
+            range_header = self.headers.get("Range")
+            if range_header and range_header.startswith("bytes="):
+                try:
                     bytes_range = range_header.replace("bytes=", "").split("-")
                     start = int(bytes_range[0])
-                    end = int(bytes_range[1]) if bytes_range[1] else file_size - 1
+                    end = int(bytes_range[1]) if (len(bytes_range) > 1 and bytes_range[1]) else file_size - 1
+                    if start < 0 or start >= file_size or end < start:
+                        raise ValueError()
+                    end = min(end, file_size - 1)
                     length = end - start + 1
                     self.send_response(206)
                     self.send_header("Content-Type", "video/mp4")
@@ -496,48 +535,80 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
                     with open(target_file, "rb") as vf:
                         vf.seek(start)
                         self.wfile.write(vf.read(length))
-                else:
-                    self.send_response(200)
-                    self.send_header("Content-Type", "video/mp4")
-                    self.send_header("Content-Length", str(file_size))
-                    self.send_header("Accept-Ranges", "bytes")
+                except Exception:
+                    self.send_response(416)
                     self.end_headers()
-                    with open(target_file, "rb") as vf:
-                        self.wfile.write(vf.read())
                 return
             else:
-                self.send_response(404)
+                self.send_response(200)
+                self.send_header("Content-Type", "video/mp4")
+                self.send_header("Content-Length", str(file_size))
+                self.send_header("Accept-Ranges", "bytes")
                 self.end_headers()
+                with open(target_file, "rb") as vf:
+                    self.wfile.write(vf.read())
                 return
 
         self.send_response(404)
         self.end_headers()
 
     def do_POST(self):
-        if self.path == "/api/upload_image":
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length)
+        content_len = self.headers.get("Content-Length")
+        if not content_len:
+            self.send_response(411)
+            self.end_headers()
+            return
+        try:
+            length = int(content_len)
+        except ValueError:
+            self.send_response(400)
+            self.end_headers()
+            return
+
+        max_limit = 50 * 1024 * 1024 if self.path == "/api/upload_image" else 2 * 1024 * 1024
+        if length > max_limit or length < 0:
+            self.send_response(413)
+            self.end_headers()
+            return
+
+        body = self.rfile.read(length)
+        try:
             payload = json.loads(body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "error", "error": "Invalid JSON payload"}).encode("utf-8"))
+            return
+
+        if self.path == "/api/upload_image":
             data_url = payload.get("data", "")
             fname = payload.get("name", "starter.png")
+            safe_fname = Path(fname).name or "starter.png"
+            ext = Path(safe_fname).suffix.lower()
+            if ext not in [".png", ".jpg", ".jpeg", ".webp"]:
+                safe_fname = f"{Path(safe_fname).stem}.png"
+
             UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
             if "," in data_url:
                 data_url = data_url.split(",", 1)[1]
-            raw_bytes = base64.b64decode(data_url)
-            clean_name = Path(fname).name or "starter.png"
-            save_path = UPLOAD_DIR / clean_name
+            try:
+                raw_bytes = base64.b64decode(data_url)
+            except Exception:
+                self.send_response(400)
+                self.end_headers()
+                return
+
+            save_path = UPLOAD_DIR / safe_fname
             with open(save_path, "wb") as f:
                 f.write(raw_bytes)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "success", "path": str(save_path)}).encode("utf-8"))
+            self.wfile.write(json.dumps({"status": "success", "path": safe_fname}).encode("utf-8"))
             return
 
         if self.path == "/api/soundscape":
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length)
-            payload = json.loads(body.decode("utf-8"))
             prompt = payload.get("prompt", "AI Future Documentary")
             advisor = SoundscapeAdvisor()
             plan = advisor.advise_soundscape(prompt)
@@ -548,10 +619,6 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/api/generate":
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length)
-            payload = json.loads(body.decode("utf-8"))
-
             prompt = payload.get("prompt", "AI Future")
             json_doc = payload.get("jsonDoc")
             mode = payload.get("mode", "real")
@@ -563,10 +630,6 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
 
             # Build command line
             cmd = [sys.executable, "-m", "iram_video.cli"]
-            if json_doc and Path(json_doc).exists():
-                cmd.extend(["--from-json", str(json_doc)])
-            else:
-                cmd.append(prompt)
 
             if mode == "real":
                 cmd.append("--real")
@@ -582,20 +645,40 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
             if lang:
                 cmd.extend(["--lang", lang])
 
-            if start_image and Path(start_image).exists():
-                cmd.extend(["--start-image", str(start_image)])
-            if extend_video and Path(extend_video).exists():
-                cmd.extend(["--extend", str(extend_video)])
+            if start_image:
+                si_name = Path(start_image).name
+                si_path = (UPLOAD_DIR / si_name).resolve()
+                if si_path.exists() and str(si_path).startswith(str(UPLOAD_DIR.resolve())):
+                    cmd.extend(["--start-image", str(si_path)])
+
+            if extend_video:
+                ev_name = Path(extend_video).name
+                ev_path = (OUTPUTS_DIR / ev_name).resolve()
+                if ev_path.exists() and str(ev_path).startswith(str(OUTPUTS_DIR.resolve())):
+                    cmd.extend(["--extend", str(ev_path)])
+
             if not steady_camera:
                 cmd.append("--dynamic-cam")
 
-            # Output filename
-            import re
             slug = re.sub(r"[^\w\s-]", "", prompt, flags=re.UNICODE).strip().lower()
             slug = re.sub(r"[-\s]+", "_", slug)[:35] or "web_render"
             out_name = f"{slug}_{mode}.mp4"
             out_file = OUTPUTS_DIR / out_name
             cmd.extend(["-o", str(out_file)])
+
+            if json_doc:
+                jd_name = Path(json_doc).name
+                jd_path = (RESOURCES_DIR / jd_name).resolve()
+                if jd_path.exists() and str(jd_path).startswith(str(RESOURCES_DIR.resolve())):
+                    cmd.extend(["--from-json", str(jd_path)])
+                else:
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "error": "Invalid resource document path"}).encode("utf-8"))
+                    return
+            else:
+                cmd.extend(["--", prompt])
 
             try:
                 proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -617,8 +700,12 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
                 }).encode("utf-8"))
             return
 
+        self.send_response(404)
+        self.end_headers()
+
 def start_server(port: int = 7860):
-    server = HTTPServer(("0.0.0.0", port), VideoStudioHandler)
-    print(f"\n🌐 [IRAM Video Studio] Running at http://localhost:{port}")
+    host = os.getenv("IRAM_HOST", "127.0.0.1")
+    server = ThreadingHTTPServer((host, port), VideoStudioHandler)
+    print(f"\n🌐 [IRAM Video Studio] Running at http://{host}:{port}")
     print(f"🎬 Ready for browser-based video directing, mascot selection, and live playback.\n")
     server.serve_forever()

@@ -2,6 +2,7 @@ import os
 import re
 import time
 import json
+import threading
 import urllib.request
 import urllib.parse
 from pathlib import Path
@@ -9,8 +10,8 @@ from typing import Optional, Dict, Any, List, Set
 from PIL import Image, ImageDraw
 from .motion_canvas import classify_semantic_beat
 
-# Allow Pillow to downscale ultra-high resolution public domain photography (> 89 megapixels)
-Image.MAX_IMAGE_PIXELS = None
+# Allow Pillow to downscale high resolution public domain photography safely (max 300 megapixels)
+Image.MAX_IMAGE_PIXELS = 300_000_000
 
 USER_AGENT = "IramVideo/2.0 (https://github.com/apravint/iram-video; apravint@gmail.com)"
 
@@ -56,6 +57,7 @@ class MediaFetcher:
     - Multi-provider fallback: Google CSE -> Pexels -> Pixabay -> Wikimedia Commons -> Motion Canvas
     """
 
+    _lock = threading.Lock()
     _used_urls: Set[str] = set()
     _topic_media_pool: List[Dict[str, Any]] = []
     _cached_topic: str = ""
@@ -63,9 +65,10 @@ class MediaFetcher:
     @classmethod
     def reset_session(cls):
         """Resets the session caches so each video compilation gets fresh variety without duplicate shots."""
-        cls._used_urls = set()
-        cls._topic_media_pool = []
-        cls._cached_topic = ""
+        with cls._lock:
+            cls._used_urls = set()
+            cls._topic_media_pool = []
+            cls._cached_topic = ""
 
     @classmethod
     def extract_anchor_phrase(cls, topic: str) -> str:
@@ -204,7 +207,8 @@ class MediaFetcher:
                             "title": title
                         })
         except Exception as e:
-            print(f"[Notice] Google Custom Search API: {e}")
+            sanitized = re.sub(r'(?:key|cx)=[^&"\s]+', 'key=[REDACTED]', str(e))
+            print(f"[Notice] Google Custom Search API: {sanitized}")
         return results
 
     @staticmethod
@@ -294,7 +298,8 @@ class MediaFetcher:
                                 "title": hit.get("tags", "Pixabay Photo")
                             })
         except Exception as e:
-            print(f"[Notice] Pixabay API: {e}")
+            sanitized = re.sub(r'(?:key|cx)=[^&"\s]+', 'key=[REDACTED]', str(e))
+            print(f"[Notice] Pixabay API: {sanitized}")
         return results
 
     @classmethod

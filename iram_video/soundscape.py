@@ -6,7 +6,12 @@ Analyzes scene action, emotional arcs, and pacing to produce bespoke acoustic/sy
 
 import os
 from typing import Dict, Any, Optional
-from google import genai
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
+
 from .director import FALLBACK_MODELS
 
 class SoundscapeAdvisor:
@@ -30,7 +35,7 @@ class SoundscapeAdvisor:
         )
 
         key = api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-        if key:
+        if key and genai:
             for model in FALLBACK_MODELS[:3]:
                 try:
                     client = genai.Client(api_key=key)

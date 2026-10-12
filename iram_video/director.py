@@ -148,9 +148,20 @@ class Director:
                     screenplay = json.loads(raw)
                     return screenplay
                 except json.JSONDecodeError as e:
-                    match = re.search(r"\{.*\}", raw, re.DOTALL)
-                    if match:
-                        return json.loads(match.group(0))
+                    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
+                    if fence_match:
+                        try:
+                            return json.loads(fence_match.group(1))
+                        except Exception:
+                            pass
+                    first_brace = raw.find("{")
+                    last_brace = raw.rfind("}")
+                    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                        candidate = raw[first_brace : last_brace + 1]
+                        try:
+                            return json.loads(candidate)
+                        except Exception:
+                            pass
                     raise ValueError(f"Failed to parse JSON: {e}")
             except Exception as e:
                 print(f"[Notice] Model {m} unavailable ({e}), trying fallback...")

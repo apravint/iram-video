@@ -35,41 +35,15 @@ class RealVideoCompiler:
         beat_type = beat.get("beat_type", "real_media")
         query = beat.get("query") or beat.get("phrase") or self.global_topic or "documentary landscape"
 
-        if beat_type == "metric_card":
+        if beat_type in ("metric_card", "route_map", "code_card"):
             tmp_video = self.shots_dir / f"tmp_single_{scene_idx:02d}.mp4"
-            MotionCanvas.render_metric_card(beat, tmp_video, duration=duration, is_shorts=self.is_shorts)
-            cmd_mux = [
-                "ffmpeg", "-y",
-                "-i", str(tmp_video),
-                "-i", str(audio_file),
-                "-map", "0:v",
-                "-map", "1:a",
-                "-c:v", "copy",
-                "-c:a", "aac",
-                "-t", f"{duration:.3f}",
-                str(out_shot)
-            ]
-            subprocess.run(cmd_mux, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return out_shot
-        elif beat_type == "route_map":
-            tmp_video = self.shots_dir / f"tmp_single_{scene_idx:02d}.mp4"
-            MotionCanvas.render_route_map(beat, tmp_video, duration=duration, is_shorts=self.is_shorts)
-            cmd_mux = [
-                "ffmpeg", "-y",
-                "-i", str(tmp_video),
-                "-i", str(audio_file),
-                "-map", "0:v",
-                "-map", "1:a",
-                "-c:v", "copy",
-                "-c:a", "aac",
-                "-t", f"{duration:.3f}",
-                str(out_shot)
-            ]
-            subprocess.run(cmd_mux, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return out_shot
-        elif beat_type == "code_card":
-            tmp_video = self.shots_dir / f"tmp_single_{scene_idx:02d}.mp4"
-            MotionCanvas.render_code_card(beat, tmp_video, duration=duration, is_shorts=self.is_shorts)
+            if beat_type == "metric_card":
+                MotionCanvas.render_metric_card(beat, tmp_video, duration=duration, is_shorts=self.is_shorts)
+            elif beat_type == "route_map":
+                MotionCanvas.render_route_map(beat, tmp_video, duration=duration, is_shorts=self.is_shorts)
+            else:
+                MotionCanvas.render_code_card(beat, tmp_video, duration=duration, is_shorts=self.is_shorts)
+
             cmd_mux = [
                 "ffmpeg", "-y",
                 "-i", str(tmp_video),
@@ -110,7 +84,7 @@ class RealVideoCompiler:
         else:
             try:
                 from PIL import Image
-                Image.MAX_IMAGE_PIXELS = None
+                Image.MAX_IMAGE_PIXELS = 300_000_000
                 with Image.open(media_path) as im:
                     if im.width > 2560 or im.height > 1440:
                         im.thumbnail((2560, 1440), Image.Resampling.LANCZOS)
@@ -218,7 +192,7 @@ class RealVideoCompiler:
             else:
                 try:
                     from PIL import Image
-                    Image.MAX_IMAGE_PIXELS = None
+                    Image.MAX_IMAGE_PIXELS = 300_000_000
                     with Image.open(media_path) as im:
                         if im.width > 2560 or im.height > 1440:
                             im.thumbnail((2560, 1440), Image.Resampling.LANCZOS)
@@ -373,55 +347,45 @@ class RealVideoCompiler:
                     v_filters.append(f"ass={ass_escaped}")
 
         # Broadcast Studio Audio Mastering (EBU R128 + Vocal Presence EQ + BGM Low-pass Ducking)
+        filter_complex_list = []
+        maps = []
+
+        if v_filters:
+            filter_complex_list.append(f"[0:v]{','.join(v_filters)}[vout]")
+            maps.extend(["-map", "[vout]"])
+            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p"]
+        else:
+            maps.extend(["-map", "0:v"])
+            video_codec_args = ["-c:v", "copy"]
+
         if bg_music and bg_music.exists():
-            fc = (
+            filter_complex_list.append(
                 "[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[voice_master];"
                 "[1:a]lowpass=f=4000,volume=0.20[bg_clean];"
                 "[bg_clean][voice_master]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
                 "[voice_master][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
             )
-            cmd_mix = [
-                "ffmpeg", "-y",
-                "-i", str(raw_concat),
-                "-i", str(bg_music),
-                "-filter_complex", fc,
-                "-map", "0:v",
-                "-map", "[aout]",
-            ]
-            if v_filters:
-                cmd_mix.extend(["-vf", ",".join(v_filters), "-c:v", "libx264", "-preset", "veryfast"])
-            else:
-                cmd_mix.extend(["-c:v", "copy"])
-
-            cmd_mix.extend([
-                "-c:a", "aac",
-                "-b:a", "320k",
-                "-ar", "48000",
-                "-movflags", "+faststart",
-                str(output_path)
-            ])
+            maps.extend(["-map", "[aout]"])
+            audio_inputs = ["-i", str(bg_music)]
         else:
-            fc = (
+            filter_complex_list.append(
                 "[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[aout]"
             )
-            cmd_mix = [
-                "ffmpeg", "-y",
-                "-i", str(raw_concat),
-                "-filter_complex", fc,
-                "-map", "0:v",
-                "-map", "[aout]"
-            ]
-            if v_filters:
-                cmd_mix.extend(["-vf", ",".join(v_filters), "-c:v", "libx264", "-preset", "veryfast"])
-            else:
-                cmd_mix.extend(["-c:v", "copy"])
+            maps.extend(["-map", "[aout]"])
+            audio_inputs = []
 
-            cmd_mix.extend([
-                "-c:a", "aac",
-                "-b:a", "320k",
-                "-ar", "48000",
-                "-movflags", "+faststart",
-                str(output_path)
-            ])
+        cmd_mix = [
+            "ffmpeg", "-y",
+            "-i", str(raw_concat),
+            *audio_inputs,
+            "-filter_complex", ";".join(filter_complex_list),
+            *maps,
+            *video_codec_args,
+            "-c:a", "aac",
+            "-b:a", "320k",
+            "-ar", "48000",
+            "-movflags", "+faststart",
+            str(output_path)
+        ]
 
         subprocess.run(cmd_mix, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

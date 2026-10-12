@@ -131,7 +131,15 @@ class VoiceSynthesizer:
                 "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
                 "-t", "3.0", "-q:a", "9", str(out_mp3)
             ]
-            subprocess.run(fallback_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *fallback_cmd,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                await proc.wait()
+            except Exception as e:
+                print(f"[Notice] Silent audio fallback error for scene '{sid}': {e}")
 
         dur = self.get_duration(out_mp3)
         scene["audio_file"] = str(out_mp3.resolve())
@@ -142,7 +150,13 @@ class VoiceSynthesizer:
 
     async def generate_all(self, scenes: List[Dict[str, Any]], output_dir: Path) -> List[Dict[str, Any]]:
         output_dir.mkdir(parents=True, exist_ok=True)
-        tasks = [self._generate_single(s, output_dir) for s in scenes]
+        sem = asyncio.Semaphore(4)
+
+        async def _bounded_single(s):
+            async with sem:
+                return await self._generate_single(s, output_dir)
+
+        tasks = [_bounded_single(s) for s in scenes]
         return await asyncio.gather(*tasks)
 
     def synthesize(self, scenes: List[Dict[str, Any]], output_dir: Path) -> List[Dict[str, Any]]:

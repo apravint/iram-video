@@ -41,7 +41,8 @@ class SoundEffectsSynthesizer:
         env = np.exp(-((t - center) ** 2) / (2 * (0.2 ** 2)))
         # Pitch carrier sweep
         carrier_freq = 200.0 + 800.0 * np.sin(np.pi * t / duration)
-        carrier = np.sin(2 * np.pi * carrier_freq * t)
+        phase = 2 * np.pi * np.cumsum(carrier_freq) / SR
+        carrier = np.sin(phase)
         
         whoosh = (white * 0.6 + carrier * 0.4) * env
         whoosh = np.tanh(whoosh * 1.5) * 0.7
