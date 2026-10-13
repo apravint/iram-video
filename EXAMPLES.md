@@ -1,6 +1,6 @@
-# IRAM VIDEO ENGINE — MASTER EXAMPLES & PLAYBOOK
+# VIDEO-GEN ENGINE — MASTER EXAMPLES & PLAYBOOK
 
-A complete, battle-tested reference guide containing every type of video you can generate with `iram-video`. 
+A complete, battle-tested reference guide containing every type of video you can generate with `video-gen`. 
 
 All examples include exact command-line syntax, production flags, and expected outputs.
 
@@ -23,7 +23,7 @@ All examples include exact command-line syntax, production flags, and expected o
 
 ## 1. Core Production Rules & Quality Standards
 
-When you run `iram-video`:
+When you run `video-gen`:
 * **Zero Slide Cards in Shorts**: Under `--shorts` or `--real`, all programmatic cards and slide boxes are bypassed. Every single beat is rendered as authentic 1080p stock video clips (`.mp4` / `.webm`).
 * **Original True Camera Colors**: The default color grade (`clean`, `documentary`, `none`) uses pure passthrough (`null`), preserving the 100% natural colors of source photos and videos without green/pink hue shifts.
 * **Mastered Broadcast Audio**: Master audio is normalized to EBU R128 standard (**-14 LUFS**, True Peak -1.5 dB, 48kHz stereo) with automatic sidechain ducking under voiceovers.

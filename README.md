@@ -1,4 +1,4 @@
-# 🎬 IRAM Video: Universal High-Quality Video & Film AI Engine (English & தமிழ்)
+# 🎬 Video-Gen: Universal High-Quality Video & Film AI Engine (English & தமிழ்)
 
 An autonomous, production-grade video generation engine that transforms **any natural language prompt, technical codebase, or screenplay into broadcast-quality 1080p MP4 videos, YouTube Shorts, cinema trailers, and animated short films**.
 
@@ -56,7 +56,7 @@ Screenplay & Shotcraft         Neural Voice Engine      Visual Synthesis Hub
 3. **Digital Human & LivePortrait Talking Avatars (`--avatar`)**:
    - Turn any single portrait image into an audio-driven talking digital presenter with natural eye-blinking, head bobbing, and lip viseme synchronization. Composited as a floating lower-third Picture-in-Picture (PiP).
 4. **Project-to-Video 'Brag' Mode (`--brag`)**:
-   - Point `iram-video` at any local codebase or git repository. It inspects commit logs, README value propositions, and tech stacks to build an explosive 30-45s developer launch trailer.
+   - Point `video-gen` at any local codebase or git repository. It inspects commit logs, README value propositions, and tech stacks to build an explosive 30-45s developer launch trailer.
 5. **Short Drama & Character Consistency Registry**:
    - Maintains strict facial, attire, and persona consistency across multiple scenes or episodes with Hollywood dramatic tension curve scoring.
 6. **Viral Retention Progress Bar & HarfBuzz Typography**:
@@ -71,33 +71,33 @@ Screenplay & Shotcraft         Neural Voice Engine      Visual Synthesis Hub
 ### 1. Developer Project Launch Video (`--brag`)
 ```bash
 # Ingest local repo and produce a 30s launch showcase:
-iram-video --brag /path/to/my-repo --shorts --music cyber
+video-gen --brag /path/to/my-repo --shorts --music cyber
 ```
 
 ### 2. Shotcraft Cinematic Product & Tech Showcase
 ```bash
 # Cinema trailer using the 'hero_reveal' shotcraft recipe:
-iram-video "Next-Gen Quantum Computing Chip" --recipe hero_reveal --cinema --music trailer
+video-gen "Next-Gen Quantum Computing Chip" --recipe hero_reveal --cinema --music trailer
 ```
 
 ### 3. Digital Human Talking Presenter (`--avatar`)
 ```bash
 # Composite an audio-driven talking avatar presenter in the corner:
-iram-video "What is Kubernetes Architecture" --avatar ./presenter.jpg --real
+video-gen "What is Kubernetes Architecture" --avatar ./presenter.jpg --real
 ```
 
 ### 4. Bilingual Tamil Documentary or Shorts (தமிழ்)
 ```bash
 # Tamil documentary with EBU R128 mastered audio and retention progress bar:
-iram-video "சென்னை மெட்ரோ இரண்டாம் கட்ட விரிவாக்கம்" --lang ta --voice valluvar --shorts --subtitles
+video-gen "சென்னை மெட்ரோ இரண்டாம் கட்ட விரிவாக்கம்" --lang ta --voice valluvar --shorts --subtitles
 ```
 
 ### 5. Multi-Model AI Video Generation
 ```bash
 # Generate with specific model hubs:
-iram-video "A futuristic rover landing on Mars" --generator veo
-iram-video "Cyberpunk detective in rainy Neo-Tokyo" --generator wan2.2
-iram-video "Ancient temple at sunrise" --generator hunyuan
+video-gen "A futuristic rover landing on Mars" --generator veo
+video-gen "Cyberpunk detective in rainy Neo-Tokyo" --generator wan2.2
+video-gen "Ancient temple at sunrise" --generator hunyuan
 ```
 
 ---
