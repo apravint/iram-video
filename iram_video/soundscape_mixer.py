@@ -105,7 +105,8 @@ class SoundscapeMixer:
         duration: float,
         music_volume: float = 0.18,
         soundscape_volume: float = 0.12,
-        work_dir: Optional[Path] = None
+        work_dir: Optional[Path] = None,
+        use_sidechain: bool = True
     ) -> Path:
         """
         Downmixes Voiceover + Background Music + Multi-Track Semantic Soundscapes with FFmpeg.
@@ -145,20 +146,31 @@ class SoundscapeMixer:
             inputs.extend(["-stream_loop", "-1", "-i", str(amb_path)])
 
         # Build FFmpeg audio filtergraph
-        # [0:a] Narration is kept at 1.0 volume
-        # Music is ducked to music_volume
-        # Ambient tracks are ducked to soundscape_volume
-        fc_parts = ["[0:a]volume=1.0[voice]"]
-        mix_sources = ["[voice]"]
+        # Narration is split if sidechain ducking is requested
+        fc_parts = []
+        mix_sources = []
 
-        curr_idx = 1
-        if has_music:
-            fc_parts.append(f"[{music_input_idx}:a]volume={music_volume:.2f}[music]")
+        if has_music and use_sidechain:
+            fc_parts.append("[0:a]asplit=2[voice_main][voice_sc]")
+            mix_sources.append("[voice_main]")
+            # Sidechain compressor ducks music when voiceover is audible
+            fc_parts.append(
+                f"[{music_input_idx}:a]volume={music_volume * 1.5:.2f}[music_pre];"
+                f"[music_pre][voice_sc]sidechaincompress=threshold=0.03:ratio=12:attack=80:release=700[music]"
+            )
             mix_sources.append("[music]")
-            curr_idx += 1
+            curr_idx = 2
+        else:
+            fc_parts.append("[0:a]volume=1.0[voice]")
+            mix_sources.append("[voice]")
+            curr_idx = 1
+            if has_music:
+                fc_parts.append(f"[{music_input_idx}:a]volume={music_volume:.2f}[music]")
+                mix_sources.append("[music]")
+                curr_idx += 1
 
         for a_idx, _ in enumerate(ambient_tracks):
-            input_slot = curr_idx + a_idx
+            input_slot = (music_input_idx + 1 if has_music else 1) + a_idx
             fc_parts.append(f"[{input_slot}:a]volume={soundscape_volume:.2f}[amb_{a_idx}]")
             mix_sources.append(f"[amb_{a_idx}]")
 

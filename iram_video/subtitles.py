@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import List, Dict, Any
 from .renderer import is_tamil_text
@@ -11,6 +12,128 @@ def format_ass_time(seconds: float) -> str:
     if cs >= 100:
         cs = 99
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+def count_syllables(word: str) -> int:
+    """Estimates syllable count using English vowel heuristic."""
+    clean = re.sub(r'[^a-zA-Z]', '', word.lower())
+    if not clean:
+        return 1
+    matches = re.findall(r'[aeiouy]+', clean)
+    count = len(matches)
+    if clean.endswith('e') and not clean.endswith('le') and count > 1:
+        count -= 1
+    return max(1, count)
+
+def syllable_word_timings(text: str, duration_sec: float) -> List[Dict[str, Any]]:
+    """
+    Offline syllable-based word timing heuristic (ported from Automated-Video-Generator).
+    When word boundaries are unavailable from the speech engine, estimates per-word timing
+    from syllable counts (~165ms per syllable clamped to [120ms, 600ms], with 40ms inter-word gap).
+    The sequence is normalized to precisely fill duration_sec.
+    """
+    words = text.split()
+    if not words:
+        return []
+    total_ms = max(400.0, float(duration_sec) * 1000.0)
+
+    weights = []
+    for w in words:
+        syl = count_syllables(w)
+        raw_w = min(600.0, max(120.0, syl * 165.0))
+        weights.append(raw_w)
+
+    raw_total = sum(weights) + 40.0 * (len(words) - 1)
+    if raw_total <= 0:
+        raw_total = float(len(words))
+    scale = total_ms / raw_total
+
+    timings = []
+    cur_ms = 0.0
+    for i, w in enumerate(words):
+        w_dur = weights[i] * scale
+        start_sec = cur_ms / 1000.0
+        end_sec = (cur_ms + w_dur) / 1000.0
+        timings.append({
+            "word": w,
+            "start": round(start_sec, 3),
+            "end": round(max(end_sec, start_sec + 0.08), 3),
+            "duration": round(max(end_sec - start_sec, 0.08), 3)
+        })
+        cur_ms = cur_ms + w_dur + (40.0 * scale)
+
+    if timings:
+        timings[-1]["end"] = round(float(duration_sec), 3)
+    return timings
+
+def ffmpeg_drawtext_escape(text: str) -> str:
+    """
+    Escapes text for FFmpeg drawtext filtergraph strings (ported from Automated-Video-Generator).
+    Replaces apostrophe with typographic ’ (U+2019) to prevent filtergraph leakage and crashes.
+    """
+    return (
+        str(text)
+        .replace("\\", "/")
+        .replace(":", "\\:")
+        .replace("'", "’")
+        .replace('"', '\\"')
+        .replace(",", "\\,")
+    )
+
+def format_srt_time(seconds: float) -> str:
+    """Formats float seconds into SRT timestamp: HH:MM:SS,mmm"""
+    total_ms = int(round(seconds * 1000))
+    h = total_ms // 3600000
+    m = (total_ms % 3600000) // 60000
+    s = (total_ms % 60000) // 1000
+    ms = total_ms % 1000
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+def format_vtt_time(seconds: float) -> str:
+    """Formats float seconds into WebVTT timestamp: HH:MM:SS.mmm"""
+    total_ms = int(round(seconds * 1000))
+    h = total_ms // 3600000
+    m = (total_ms % 3600000) // 60000
+    s = (total_ms % 60000) // 1000
+    ms = total_ms % 1000
+    return f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
+
+def export_srt(scenes: List[Dict[str, Any]], out_srt_path: Path) -> Path:
+    """Serializes scenes into a standard SubRip (.srt) caption file."""
+    out_srt_path = Path(out_srt_path)
+    out_srt_path.parent.mkdir(parents=True, exist_ok=True)
+    cues = []
+    cursor = 0.0
+    cue_idx = 1
+    for scene in scenes:
+        dur = float(scene.get("duration", 4.0))
+        text = str(scene.get("narration") or scene.get("title") or "").strip()
+        if text:
+            start_str = format_srt_time(cursor)
+            end_str = format_srt_time(cursor + dur)
+            cues.append(f"{cue_idx}\n{start_str} --> {end_str}\n{text}\n")
+            cue_idx += 1
+        cursor += dur
+    out_srt_path.write_text("\n".join(cues), encoding="utf-8")
+    return out_srt_path
+
+def export_vtt(scenes: List[Dict[str, Any]], out_vtt_path: Path) -> Path:
+    """Serializes scenes into a standard WebVTT (.vtt) caption file."""
+    out_vtt_path = Path(out_vtt_path)
+    out_vtt_path.parent.mkdir(parents=True, exist_ok=True)
+    cues = ["WEBVTT\n"]
+    cursor = 0.0
+    cue_idx = 1
+    for scene in scenes:
+        dur = float(scene.get("duration", 4.0))
+        text = str(scene.get("narration") or scene.get("title") or "").strip()
+        if text:
+            start_str = format_vtt_time(cursor)
+            end_str = format_vtt_time(cursor + dur)
+            cues.append(f"{cue_idx}\n{start_str} --> {end_str}\n{text}\n")
+            cue_idx += 1
+        cursor += dur
+    out_vtt_path.write_text("\n".join(cues), encoding="utf-8")
+    return out_vtt_path
 
 FONTS_DIR = Path(__file__).parent.parent / "assets" / "fonts"
 
@@ -134,37 +257,37 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                         end_str = format_ass_time(w_end)
                         events.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{line_text}")
             else:
-                words = text.split()
-                if not words:
+                syl_timings = syllable_word_timings(text, duration)
+                if not syl_timings:
                     continue
 
-                # Split into punchy 2-4 word phrases
-                chunk_size = 3 if len(words) >= 6 else (2 if len(words) >= 4 else len(words))
+                chunk_size = 3 if len(syl_timings) >= 6 else (2 if len(syl_timings) >= 4 else len(syl_timings))
                 chunks = []
-                for i in range(0, len(words), chunk_size):
-                    chunks.append(words[i:i + chunk_size])
-
-                chunk_duration = duration / max(1, len(chunks))
+                for i in range(0, len(syl_timings), chunk_size):
+                    chunks.append(syl_timings[i:i + chunk_size])
 
                 for c_idx, chunk in enumerate(chunks):
-                    c_start = scene_start + (c_idx * chunk_duration)
-                    c_end = c_start + chunk_duration
-                    word_dur = chunk_duration / len(chunk)
+                    c_start = scene_start + chunk[0]["start"]
+                    c_end = scene_start + chunk[-1]["end"]
+                    if c_idx < len(chunks) - 1:
+                        next_c_start = scene_start + chunks[c_idx + 1][0]["start"]
+                        c_end = min(c_end + 0.15, next_c_start)
 
-                    # Micro-animate each word in this chunk
-                    for w_idx, active_word in enumerate(chunk):
-                        w_start = c_start + (w_idx * word_dur)
-                        w_end = w_start + word_dur
-                        if w_idx == len(chunk) - 1:
-                            w_end = c_end
+                    for w_idx, active_item in enumerate(chunk):
+                        w_start = scene_start + active_item["start"]
+                        w_end = scene_start + active_item["end"]
+                        if w_idx < len(chunk) - 1:
+                            w_end = min(w_end + 0.08, scene_start + chunk[w_idx + 1]["start"])
+                        else:
+                            w_end = max(w_end, c_end)
 
                         styled_tokens = []
-                        for k, w in enumerate(chunk):
+                        for k, item in enumerate(chunk):
+                            w_word = item["word"].upper()
                             if k == w_idx:
-                                # Active word: Highlighted & slightly scaled
-                                styled_tokens.append(f"{{{accent_color}\\fscx112\\fscy112}}{w.upper()}{{\\c&H00FFFFFF&\\fscx100\\fscy100}}")
+                                styled_tokens.append(f"{{{accent_color}\\fscx112\\fscy112}}{w_word}{{\\c&H00FFFFFF&\\fscx100\\fscy100}}")
                             else:
-                                styled_tokens.append(w.upper())
+                                styled_tokens.append(w_word)
 
                         line_text = " ".join(styled_tokens)
                         start_str = format_ass_time(w_start)

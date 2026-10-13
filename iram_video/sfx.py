@@ -75,3 +75,156 @@ class SoundEffectsSynthesizer:
             wf.setsampwidth(2)
             wf.setframerate(SR)
             wf.writeframes(audio_int16.tobytes())
+
+    @staticmethod
+    def generate_ding(out_path: Path, duration: float = 0.4):
+        """Short 880Hz chime with exponential decay (ported from Automated-Video-Generator)."""
+        t = np.linspace(0, duration, int(SR * duration), endpoint=False)
+        envelope = np.exp(-t * 8.0)
+        signal = np.sin(2 * np.pi * 880.0 * t) * envelope * 0.45
+        audio_int16 = (signal * 32767).astype(np.int16)
+        with wave.open(str(out_path), "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SR)
+            wf.writeframes(audio_int16.tobytes())
+
+    @staticmethod
+    def generate_click(out_path: Path, duration: float = 0.05):
+        """Crisp mechanical impulse click."""
+        t = np.linspace(0, duration, int(SR * duration), endpoint=False)
+        noise = np.random.normal(0, 0.4, len(t))
+        envelope = np.exp(-t * 120.0)
+        signal = noise * envelope * 0.5
+        audio_int16 = (signal * 32767).astype(np.int16)
+        with wave.open(str(out_path), "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SR)
+            wf.writeframes(audio_int16.tobytes())
+
+    @staticmethod
+    def generate_pop(out_path: Path, duration: float = 0.08):
+        """Short bubble pop."""
+        t = np.linspace(0, duration, int(SR * duration), endpoint=False)
+        freq = 320.0 + 400.0 * np.exp(-t * 45.0)
+        phase = 2 * np.pi * np.cumsum(freq) / SR
+        envelope = np.exp(-t * 35.0)
+        signal = np.sin(phase) * envelope * 0.55
+        audio_int16 = (signal * 32767).astype(np.int16)
+        with wave.open(str(out_path), "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SR)
+            wf.writeframes(audio_int16.tobytes())
+
+    @staticmethod
+    def generate_notification(out_path: Path, duration: float = 0.3):
+        """Two-tone UI chime: 440Hz followed by 880Hz."""
+        half = duration / 2.0
+        t1 = np.linspace(0, half, int(SR * half), endpoint=False)
+        t2 = np.linspace(0, half, int(SR * half), endpoint=False)
+        tone1 = np.sin(2 * np.pi * 440.0 * t1) * np.exp(-t1 * 10.0) * 0.4
+        tone2 = np.sin(2 * np.pi * 880.0 * t2) * np.exp(-t2 * 8.0) * 0.45
+        signal = np.concatenate([tone1, tone2])
+        audio_int16 = (signal * 32767).astype(np.int16)
+        with wave.open(str(out_path), "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SR)
+            wf.writeframes(audio_int16.tobytes())
+
+    @staticmethod
+    def generate_swish(out_path: Path, duration: float = 0.15):
+        """Quick high-frequency sweep for code cards and animated list items."""
+        t = np.linspace(0, duration, int(SR * duration), endpoint=False)
+        carrier_freq = 400.0 + 1200.0 * (t / duration)
+        phase = 2 * np.pi * np.cumsum(carrier_freq) / SR
+        carrier = np.sin(phase)
+        noise = np.random.normal(0, 0.2, len(t))
+        envelope = np.sin(np.pi * t / duration)
+        signal = (carrier * 0.4 + noise * 0.25) * envelope * 0.5
+        audio_int16 = (signal * 32767).astype(np.int16)
+        with wave.open(str(out_path), "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SR)
+            wf.writeframes(audio_int16.tobytes())
+
+    @staticmethod
+    def generate_transition(out_path: Path, duration: float = 0.4):
+        """Sweep + noise blend for scene transitions."""
+        t = np.linspace(0, duration, int(SR * duration), endpoint=False)
+        noise = np.random.normal(0, 0.25, len(t))
+        carrier_freq = 150.0 + 850.0 * np.sin(np.pi * t / duration)
+        phase = 2 * np.pi * np.cumsum(carrier_freq) / SR
+        env = np.sin(np.pi * t / duration) ** 1.5
+        signal = (noise * 0.4 + np.sin(phase) * 0.35) * env * 0.55
+        audio_int16 = (signal * 32767).astype(np.int16)
+        with wave.open(str(out_path), "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SR)
+            wf.writeframes(audio_int16.tobytes())
+
+    @staticmethod
+    def generate_bounce(out_path: Path, duration: float = 0.35):
+        """Rising two-tone bounce for positive reveals."""
+        t = np.linspace(0, duration, int(SR * duration), endpoint=False)
+        freq = 300.0 + 223.0 * (t / duration)
+        phase = 2 * np.pi * np.cumsum(freq) / SR
+        env = np.sin(np.pi * t / duration)
+        signal = np.sin(phase) * env * 0.45
+        audio_int16 = (signal * 32767).astype(np.int16)
+        with wave.open(str(out_path), "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SR)
+            wf.writeframes(audio_int16.tobytes())
+
+    @staticmethod
+    def generate_riser(out_path: Path, duration: float = 1.5):
+        """Ascending frequency riser for tension building."""
+        t = np.linspace(0, duration, int(SR * duration), endpoint=False)
+        freq = 80.0 + 1200.0 * (t / duration) ** 2
+        phase = 2 * np.pi * np.cumsum(freq) / SR
+        env = (t / duration) ** 1.2
+        signal = np.sin(phase) * env * 0.5
+        audio_int16 = (signal * 32767).astype(np.int16)
+        with wave.open(str(out_path), "w") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SR)
+            wf.writeframes(audio_int16.tobytes())
+
+    @classmethod
+    def generate_sfx(cls, kind: str, out_path: Path, duration: float = None) -> Path:
+        """Universal SFX dispatcher with disk caching."""
+        out_path = Path(out_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        if out_path.exists() and out_path.stat().st_size > 500:
+            return out_path
+
+        k = kind.lower().strip()
+        dispatch = {
+            "impact": (cls.generate_impact, 2.5),
+            "hit": (cls.generate_impact, 2.5),
+            "whoosh": (cls.generate_whoosh, 1.2),
+            "swoosh": (cls.generate_whoosh, 1.2),
+            "telemetry": (cls.generate_telemetry, 2.0),
+            "ding": (cls.generate_ding, 0.4),
+            "bell": (cls.generate_ding, 0.4),
+            "click": (cls.generate_click, 0.05),
+            "pop": (cls.generate_pop, 0.08),
+            "notification": (cls.generate_notification, 0.3),
+            "swish": (cls.generate_swish, 0.15),
+            "transition": (cls.generate_transition, 0.4),
+            "bounce": (cls.generate_bounce, 0.35),
+            "riser": (cls.generate_riser, 1.5),
+        }
+
+        func, def_dur = dispatch.get(k, (cls.generate_whoosh, 1.2))
+        dur = duration if duration is not None else def_dur
+        func(out_path, duration=dur)
+        return out_path
+

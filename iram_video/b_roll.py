@@ -358,8 +358,140 @@ class MediaFetcher:
         return results
 
     @classmethod
+    def search_openverse(cls, query: str, require_video: bool = False, count: int = 8) -> List[Dict[str, Any]]:
+        """Searches Openverse API for zero-cost CC-licensed public imagery (ported from Automated-Video-Generator)."""
+        if require_video:
+            return []
+        results = []
+        try:
+            url = f"https://api.openverse.engineering/v1/images/?q={urllib.parse.quote(query)}&page_size={count}"
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                for r in data.get("results", []):
+                    img_url = r.get("url")
+                    if img_url:
+                        results.append({
+                            "type": "image",
+                            "url": img_url,
+                            "width": r.get("width", 1920),
+                            "height": r.get("height", 1080),
+                            "title": r.get("title", "Openverse CC Image"),
+                            "provider": "openverse"
+                        })
+        except Exception as e:
+            pass
+        return results
+
+    @classmethod
+    def search_coverr(cls, query: str, count: int = 6) -> List[Dict[str, Any]]:
+        """Searches Coverr for free, unwatermarked stock video clips (ported from Automated-Video-Generator)."""
+        results = []
+        try:
+            url = f"https://coverr.co/api/videos?search={urllib.parse.quote(query)}&per_page={count}"
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                videos = data.get("data") or data.get("videos") or []
+                for v in videos:
+                    v_url = v.get("url") or (f"https://storage.coverr.co/videos/{v['file']}" if v.get("file") else None)
+                    if v_url:
+                        results.append({
+                            "type": "video",
+                            "url": v_url,
+                            "width": v.get("width", 1920),
+                            "height": v.get("height", 1080),
+                            "title": v.get("title", "Coverr Free Video"),
+                            "provider": "coverr"
+                        })
+        except Exception as e:
+            pass
+        return results
+
+    @classmethod
+    def search_nasa(cls, query: str, count: int = 6) -> List[Dict[str, Any]]:
+        """Searches NASA Image & Video Library for public domain scientific imagery."""
+        results = []
+        try:
+            url = f"https://images-api.nasa.gov/search?q={urllib.parse.quote(query)}&media_type=image&page_size={count}"
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                for item in data.get("collection", {}).get("items", []):
+                    links = item.get("links", [])
+                    img_link = next((l["href"] for l in links if l.get("href")), None)
+                    item_data = item.get("data", [{}])[0]
+                    if img_link:
+                        results.append({
+                            "type": "image",
+                            "url": img_link,
+                            "width": 1920,
+                            "height": 1080,
+                            "title": item_data.get("title", "NASA Image"),
+                            "provider": "nasa"
+                        })
+        except Exception as e:
+            pass
+        return results
+
+    @classmethod
+    def search_metmuseum(cls, query: str, count: int = 6) -> List[Dict[str, Any]]:
+        """Searches Met Museum Open Access collection for historical and artistic visual assets."""
+        results = []
+        try:
+            url = f"https://collectionapi.metmuseum.org/public/collection/v1/search?q={urllib.parse.quote(query)}&hasImages=true"
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                object_ids = data.get("objectIDs") or []
+                for oid in object_ids[:count]:
+                    try:
+                        obj_url = f"https://collectionapi.metmuseum.org/public/collection/v1/objects/{oid}"
+                        obj_req = urllib.request.Request(obj_url, headers={"User-Agent": USER_AGENT})
+                        with urllib.request.urlopen(obj_req, timeout=3) as o_resp:
+                            obj_data = json.loads(o_resp.read().decode("utf-8"))
+                            img = obj_data.get("primaryImage") or obj_data.get("primaryImageSmall")
+                            if img:
+                                results.append({
+                                    "type": "image",
+                                    "url": img,
+                                    "width": 1920,
+                                    "height": 1080,
+                                    "title": obj_data.get("title", "Met Museum Art"),
+                                    "provider": "metmuseum"
+                                })
+                    except Exception:
+                        continue
+        except Exception as e:
+            pass
+        return results
+
+    @staticmethod
+    def verify_media_file(file_path: Path, min_size_bytes: int = 4000) -> bool:
+        """Verifies media asset is non-empty, non-corrupt, and decodable via PIL/ffprobe."""
+        p = Path(file_path)
+        if not p.exists() or p.stat().st_size < min_size_bytes:
+            return False
+        ext = p.suffix.lower()
+        if ext in [".jpg", ".jpeg", ".png", ".webp"]:
+            try:
+                with Image.open(p) as img:
+                    img.verify()
+                return True
+            except Exception:
+                return False
+        import subprocess
+        cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(p)]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
+            dur = float(res.stdout.strip())
+            return dur > 0.05
+        except Exception:
+            return False
+
+    @classmethod
     def search_media(cls, query: str, require_video: bool = False, global_topic: str = "", is_shorts: bool = False) -> List[Dict[str, Any]]:
-        """Multi-source stock provider waterfall: Google CSE -> Pexels -> Pixabay -> Wikimedia Commons."""
+        """Multi-source stock provider waterfall: Google CSE -> Pexels -> Pixabay -> Wikimedia Commons -> Coverr -> Openverse -> NASA."""
         g_results = cls.search_google_custom_search(query)
         if g_results:
             return g_results
@@ -373,7 +505,27 @@ class MediaFetcher:
         if pb_results:
             return pb_results
 
-        return cls.search_wikimedia(query, require_video=require_video, global_topic=global_topic)
+        wm_results = cls.search_wikimedia(query, require_video=require_video, global_topic=global_topic)
+        if wm_results:
+            return wm_results
+
+        # Zero-cost open sources from Automated-Video-Generator architecture
+        if require_video:
+            cv_results = cls.search_coverr(query)
+            if cv_results:
+                return cv_results
+        else:
+            ov_results = cls.search_openverse(query)
+            if ov_results:
+                return ov_results
+            nasa_results = cls.search_nasa(query)
+            if nasa_results:
+                return nasa_results
+            met_results = cls.search_metmuseum(query)
+            if met_results:
+                return met_results
+
+        return []
 
     @staticmethod
     def download_file(url: str, out_path: Path) -> bool:

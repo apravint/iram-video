@@ -189,3 +189,105 @@ class VoiceSynthesizer:
                 subprocess.run(fallback_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         return self.get_duration(output_file)
+
+    @staticmethod
+    def trim_silence(audio_file: Path, out_path: Path = None, threshold_db: float = -40.0) -> Path:
+        """
+        Trims leading and trailing dead silence from speech audio files using FFmpeg silenceremove
+        (ported from Automated-Video-Generator voice pacing engine).
+        Improves video retention and pacing.
+        """
+        audio_file = Path(audio_file)
+        if not audio_file.exists() or audio_file.stat().st_size == 0:
+            return audio_file
+
+        target = Path(out_path) if out_path else audio_file.with_name(f"{audio_file.stem}_trimmed{audio_file.suffix}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        # silenceremove head and tail:
+        filter_str = (
+            f"silenceremove=start_periods=1:start_duration=0.03:start_threshold={threshold_db}dB:detection=peak,"
+            f"areverse,silenceremove=start_periods=1:start_duration=0.03:start_threshold={threshold_db}dB:detection=peak,areverse"
+        )
+        cmd = [
+            "ffmpeg", "-y", "-i", str(audio_file),
+            "-af", filter_str,
+            "-c:a", "libmp3lame" if target.suffix.lower() == ".mp3" else "pcm_s16le",
+            str(target)
+        ]
+        try:
+            res = subprocess.run(cmd, capture_output=True, timeout=8)
+            if res.returncode == 0 and target.exists() and target.stat().st_size > 1000:
+                return target
+        except Exception:
+            pass
+        return audio_file
+
+    @staticmethod
+    def apply_voice_effect(
+        audio_file: Path,
+        effect: str = "none",
+        out_path: Path = None,
+        speed: float = 1.0,
+        pitch_shift: int = 0
+    ) -> Path:
+        """
+        Applies voice character shaping and acoustic filters using pure FFmpeg.
+        Supported effects: 'deep', 'high', 'robot', 'telephone', 'radio', 'echo', 'chipmunk', 'monster'.
+        """
+        audio_file = Path(audio_file)
+        if not audio_file.exists() or audio_file.stat().st_size == 0:
+            return audio_file
+
+        target = Path(out_path) if out_path else audio_file.with_name(f"{audio_file.stem}_fx_{effect}{audio_file.suffix}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        effects_map = {
+            "deep": "asetrate=22050,aresample=44100,atempo=0.8",
+            "high": "asetrate=88200,aresample=44100,atempo=1.2",
+            "robot": "asetrate=16000,aresample=44100,vibrato=f=10:d=0.5",
+            "echo": "aecho=0.8:0.9:1000:0.3",
+            "telephone": "highpass=f=300,lowpass=f=3000",
+            "radio": "highpass=f=400,lowpass=f=3500,volume=1.2",
+            "chipmunk": "asetrate=66150,aresample=44100,atempo=1.5",
+            "monster": "asetrate=11025,aresample=44100,atempo=0.6,vibrato=f=8:d=0.8",
+        }
+
+        filters = []
+        eff_lower = effect.lower().strip()
+        if eff_lower in effects_map:
+            filters.append(effects_map[eff_lower])
+
+        if pitch_shift != 0:
+            rate = 2.0 ** (pitch_shift / 12.0)
+            filters.append(f"asetrate=44100*{rate:.3f},aresample=44100")
+
+        if speed != 1.0 and 0.5 <= speed <= 2.0:
+            filters.append(f"atempo={speed:.2f}")
+
+        if not filters:
+            return audio_file
+
+        filter_graph = ",".join(filters)
+        cmd = [
+            "ffmpeg", "-y", "-i", str(audio_file),
+            "-af", filter_graph,
+            "-c:a", "libmp3lame" if target.suffix.lower() == ".mp3" else "pcm_s16le",
+            str(target)
+        ]
+        try:
+            res = subprocess.run(cmd, capture_output=True, timeout=10)
+            if res.returncode == 0 and target.exists() and target.stat().st_size > 1000:
+                return target
+        except Exception:
+            pass
+        return audio_file
+
+    @staticmethod
+    def estimate_audio_duration(text: str, wpm: float = 145.0) -> float:
+        """Heuristic duration estimator from word/syllable count for offline or mocked runs."""
+        words = text.split()
+        if not words:
+            return 3.0
+        return max(2.5, round((len(words) / (wpm / 60.0)) + 0.8, 2))
+
