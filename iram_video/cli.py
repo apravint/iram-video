@@ -59,6 +59,8 @@ def load_prompt_from_json(json_path: Path):
     style = f"Technical and architectural deep-dive based on {json_path.name}"
     return prompt, style
 
+from .templates import VIDEO_TEMPLATES, get_template
+
 def main():
     parser = argparse.ArgumentParser(
         prog="iram-video",
@@ -80,24 +82,45 @@ def main():
     parser.add_argument("--lang", default="auto", choices=["auto", "en", "ta", "tamil", "english"], help="Language: 'en' for English, 'ta' for Tamil, 'auto' for auto-detection (default: auto)")
     parser.add_argument("--voice", default="default", help="Voice persona ('aria', 'christopher', 'jenny', 'pallavi' [Tamil female], 'valluvar' [Tamil male], etc.)")
     parser.add_argument("--scenes", type=int, default=None, help="Desired scene count (default: auto)")
-    parser.add_argument("--music", default="auto", choices=["auto", "documentary", "acoustic", "lofi", "tech", "ambient", "trailer", "cinematic", "cyber", "none"], help="Background music mood (default: documentary for real/youtube, cyber for tech, trailer for cinema)")
+    parser.add_argument("--music", default="auto", choices=["auto", "documentary", "acoustic", "lofi", "tech", "ambient", "trailer", "cinematic", "corporate", "energetic", "minimal", "cyber", "none"], help="Background music mood (default: auto)")
+    parser.add_argument("--bg-music", default=None, help="Custom background music track file path (MP3, WAV, AAC)")
+    parser.add_argument("--music-volume", type=float, default=0.20, help="Background music volume ducking level (default: 0.20)")
     parser.add_argument("--style", default=None, help="Style hint for the director (e.g. 'documentary', 'realistic', 'vox style', 'educational')")
+    parser.add_argument("--template", choices=list(VIDEO_TEMPLATES.keys()), default=None, help="Video genre template ('explainer', 'tutorial', 'listicle', 'comparison', 'news', 'promo', 'podcast')")
+    parser.add_argument("--tutorial", action="store_true", help="Shortcut for --template tutorial")
+    parser.add_argument("--listicle", action="store_true", help="Shortcut for --template listicle")
+    parser.add_argument("--comparison", action="store_true", help="Shortcut for --template comparison")
+    parser.add_argument("--news", action="store_true", help="Shortcut for --template news")
+    parser.add_argument("--promo", action="store_true", help="Shortcut for --template promo")
+    parser.add_argument("--explainer", action="store_true", help="Shortcut for --template explainer")
+    parser.add_argument("--podcast", action="store_true", help="Shortcut for --template podcast")
+    parser.add_argument("--aspect-ratio", "--ratio", dest="aspect_ratio", default="auto", choices=["auto", "16:9", "9:16", "1:1", "2.39:1"], help="Video aspect ratio (default: auto, 16:9 or 9:16 for shorts)")
+    parser.add_argument("--4k", dest="is_4k", action="store_true", help="Render in 4K UHD high resolution")
+    parser.add_argument("--transition", default="fade", choices=["fade", "dissolve", "wipeleft", "wiperight", "slideleft", "slideright", "smoothleft", "circlecrop", "fadeblack", "fadewhite", "cut", "none"], help="Cinematic transition between scenes (default: fade)")
+    parser.add_argument("--grade", default="auto", choices=["auto", "clean", "documentary", "cinematic", "vintage", "noir", "vibrant", "none"], help="Cinematic color grading preset (default: auto)")
     parser.add_argument("--no-thumbnail", action="store_true", help="Skip thumbnail generation")
-    parser.add_argument("--generator", default="auto", choices=["auto", "veo", "wan", "wan2", "wan2.1", "wan2.2", "hunyuan", "cogvideo", "sana", "fal", "replicate", "kling", "stock"], help="Video generator model hub: 'auto', 'veo' (Google), 'wan'/'wan2.2' (Alibaba), 'hunyuan' (Tencent 13B), 'cogvideo' (Zhipu 5B), 'sana' (NVIDIA Linear DiT), 'stock'")
+    parser.add_argument("--generator", default="auto", choices=["auto", "veo", "wan", "wan2", "wan2.1", "wan2.2", "hunyuan", "cogvideo", "sana", "fal", "replicate", "kling", "stock"], help="Video generator model hub")
     parser.add_argument("--veo", dest="generator_veo", action="store_true", help="Prioritize Google Veo 3.1 / 2.0 generative video synthesis")
     parser.add_argument("--ai-video", dest="ai_video", action="store_true", help="Enable AI generative video synthesis with automatic multi-tier fallback")
-    parser.add_argument("--subtitle-palette", default="auto", choices=["auto", "gold", "hormozi", "neon-cyan", "neon-green", "fire-red", "purple", "white"], help="Subtitle color palette ('gold', 'hormozi', 'neon-cyan', 'neon-green', 'fire-red', 'purple', 'white')")
-    parser.add_argument("--recipe", choices=list(SHOT_RECIPES.keys()), default=None, help="Cinematic shotcraft recipe card (e.g. 'hero_reveal', 'macro_orbit', 'speed_ramp', 'isometric_exploded')")
-    parser.add_argument("--steady", "--steady-cam", dest="steady_camera", action="store_true", default=True, help="Enable steady-cam mode: subtle micro-drift or static framing with zero dizzying camera motion (default: True)")
-    parser.add_argument("--dynamic-cam", dest="steady_camera", action="store_false", help="Enable dynamic legacy camera motion with larger zooms and pans")
+    parser.add_argument("--subtitle-palette", default="auto", choices=["auto", "gold", "hormozi", "neon-cyan", "neon-green", "fire-red", "purple", "white"], help="Subtitle color palette")
+    parser.add_argument("--recipe", choices=list(SHOT_RECIPES.keys()), default=None, help="Cinematic shotcraft recipe card")
+    parser.add_argument("--steady", "--steady-cam", dest="steady_camera", action="store_true", default=True, help="Enable steady-cam mode (default: True)")
+    parser.add_argument("--dynamic-cam", dest="steady_camera", action="store_false", help="Enable dynamic legacy camera motion")
     parser.add_argument("--mcp", action="store_true", help="Launch the Model Context Protocol (MCP) JSON-RPC server on stdio for LLMs & AI agents")
     parser.add_argument("--extend", default=None, help="Continuous scene extension mode: path to previous MP4 video to chain and extend")
     parser.add_argument("--image", "--start-image", dest="start_image", default=None, help="Image-to-Video storyboarding: path to seed starting image/photo")
     parser.add_argument("--brag", default=None, help="Repository-to-video mode: auto-inspect a codebase/git repository and craft a developer launch showcase")
     parser.add_argument("--avatar", default=None, help="Digital human talking avatar mode: pass a portrait image to composite talking presenter")
+    parser.add_argument("--api", "--fastapi", dest="fastapi", action="store_true", help="Launch the decoupled FastAPI REST API & Async Task Queue server")
+    parser.add_argument("--api-port", type=int, default=8000, help="FastAPI port (default: 8000)")
     parser.add_argument("--tension", action="store_true", help="Apply drama tension curve analysis and dramatic beat scoring")
 
     args = parser.parse_args()
+
+    if args.fastapi:
+        from .api import start_fastapi
+        start_fastapi(port=args.api_port)
+        return
 
     if args.mcp:
         from .mcp_server import main as mcp_main
@@ -165,10 +188,55 @@ def main():
     else:
         lang = "en"
 
+    # Template resolution
+    selected_template = args.template
+    if args.tutorial:
+        selected_template = "tutorial"
+    elif args.listicle:
+        selected_template = "listicle"
+    elif args.comparison:
+        selected_template = "comparison"
+    elif args.news:
+        selected_template = "news"
+    elif args.promo:
+        selected_template = "promo"
+    elif args.explainer:
+        selected_template = "explainer"
+    elif args.podcast:
+        selected_template = "podcast"
+
+    if selected_template:
+        t_spec = get_template(selected_template)
+        if args.scenes is None:
+            args.scenes = t_spec.get("default_scenes", 4)
+        if not args.style:
+            args.style = t_spec.get("directorial_hints", "")
+        if args.music == "auto":
+            args.music = t_spec.get("default_music", "auto")
+        if args.grade == "auto":
+            args.grade = t_spec.get("default_color_grade", "clean")
+        if t_spec.get("is_real", False) and not (args.cinema or args.film):
+            args.real = True
+
     is_film = args.film
     is_shorts = args.shorts
     is_cinema = args.cinema or is_film
     is_real = args.real
+
+    # Aspect ratio resolution
+    aspect_ratio = args.aspect_ratio
+    if aspect_ratio == "auto":
+        if is_shorts:
+            aspect_ratio = "9:16"
+        elif is_cinema:
+            aspect_ratio = "2.39:1"
+        else:
+            aspect_ratio = "16:9"
+    else:
+        if aspect_ratio == "9:16":
+            is_shorts = True
+        elif aspect_ratio == "2.39:1":
+            is_cinema = True
 
     generator_prov = args.generator
     if args.generator_veo:
@@ -182,6 +250,18 @@ def main():
     doc_triggers = [r"\breal\b", r"\bdocumentary\b", r"\bhistory\b", r"\bnature\b", r"\bscience\b", r"\bhow to\b"]
     if not is_film and not is_cinema and (args.real or any(re.search(pat, p_low) for pat in doc_triggers)):
         is_real = True
+
+    # Color grading preset
+    color_grade = args.grade
+    if color_grade == "auto":
+        if is_cinema or is_film:
+            color_grade = "cinematic"
+        elif is_real:
+            color_grade = "documentary"
+        else:
+            color_grade = "clean"
+
+    transition = args.transition
 
     # Subtitles disabled by default unless explicitly requested
     burn_subtitles = args.subtitles and not args.no_subtitles
@@ -212,16 +292,18 @@ def main():
         else:
             music_mood = "tech"
 
+    res_badge = "4K UHD" if args.is_4k else "1080p HD"
+    tmpl_badge = f" [{selected_template.upper()} TEMPLATE]" if selected_template else ""
     if is_film:
-        format_label = "Animated Feature Film (Multi-Character Dialogue & Procedural Sets)"
+        format_label = f"Animated Feature Film ({res_badge}, Multi-Character Dialogue & Procedural Sets){tmpl_badge}"
     elif is_cinema:
-        format_label = "Hollywood Cinema Trailer (24 FPS, 2.39:1 Scope)" if not is_shorts else "Vertical Cinematic Shorts (24 FPS, Scope Bars)"
+        format_label = f"Hollywood Cinema Trailer ({res_badge}, 24 FPS, 2.39:1 Scope){tmpl_badge}" if not is_shorts else f"Vertical Cinematic Shorts ({res_badge}, 24 FPS){tmpl_badge}"
     elif is_real:
-        format_label = "Real YouTube Documentary (Real B-Roll Video & 4K Photography, Acoustic Score, No Subtitles)"
+        format_label = f"Real YouTube Documentary ({res_badge}, {aspect_ratio}, Real B-Roll, Grade: {color_grade}){tmpl_badge}"
     elif is_shorts:
-        format_label = "YouTube Shorts (Vertical 9:16, 1080x1920)"
+        format_label = f"YouTube Shorts ({res_badge}, Vertical 9:16, 1080x1920){tmpl_badge}"
     else:
-        format_label = "Landscape (16:9, 1920x1080)"
+        format_label = f"Universal Video ({res_badge}, {aspect_ratio}, Grade: {color_grade}, Transition: {transition}){tmpl_badge}"
 
     slug = slugify(args.prompt)
     if is_shorts and not slug.endswith("_shorts"):
@@ -331,7 +413,8 @@ def main():
                 is_shorts=is_shorts,
                 is_cinema=is_cinema,
                 is_real=is_real,
-                character=character
+                character=character,
+                template=selected_template
             )
         except Exception as e:
             print(f"❌ Failed to direct screenplay with Google Gemini: {e}")
@@ -353,31 +436,80 @@ def main():
         total_duration = sum(s["duration"] for s in scenes)
         print(f"✓ Voiceover complete using voice '{voice_synth.voice}': {total_duration:.1f}s total duration")
 
-        # 3. Background Music Synthesis
+        # 3. Background Music (Custom track or synthesized mood track)
         bg_music_wav = work_dir / "bg_music.wav"
-        if music_mood != "none":
+        if args.bg_music:
+            custom_bg = Path(args.bg_music).resolve()
+            if custom_bg.exists():
+                print(f"🎵 [3/5] Using custom background music track: '{custom_bg.name}'...")
+                bg_music_wav = custom_bg
+            else:
+                print(f"⚠️ Custom music file not found: {custom_bg}. Falling back to '{music_mood}' synth track...")
+                if music_mood != "none":
+                    synthesize_mood_track(music_mood, total_duration + 5.0, bg_music_wav)
+                else:
+                    bg_music_wav = None
+        elif music_mood != "none":
             print(f"🎵 [3/5] Synthesizing '{music_mood}' soundtrack...")
             synthesize_mood_track(music_mood, total_duration + 5.0, bg_music_wav)
             print("✓ Soundtrack ready")
         else:
             bg_music_wav = None
 
-        dim_str = "1080x1920" if is_shorts else "1920x1080"
+        if aspect_ratio == "1:1":
+            dim_str = "2160x2160" if args.is_4k else "1080x1080"
+        elif aspect_ratio == "9:16" or is_shorts:
+            dim_str = "2160x3840" if args.is_4k else "1080x1920"
+        elif aspect_ratio == "2.39:1":
+            dim_str = "3840x1608" if args.is_4k else "2560x1072"
+        else:
+            dim_str = "3840x2160" if args.is_4k else "1920x1080"
 
         # 4 & 5. Video Sourcing & Compilation
         if is_real:
             combined_topic = f"{args.prompt} | {video_title}"
             print(f"🎥 [4/5] Sourcing video footage ({generator_prov.upper()} generative AI + stock fallback)...")
             start_img = Path(args.start_image).resolve() if args.start_image else None
-            real_compiler = RealVideoCompiler(work_dir, is_shorts=is_shorts, provider=generator_prov, global_topic=combined_topic, steady_camera=args.steady_camera, start_image=start_img)
+            real_compiler = RealVideoCompiler(
+                work_dir,
+                is_shorts=is_shorts,
+                provider=generator_prov,
+                global_topic=combined_topic,
+                steady_camera=args.steady_camera,
+                start_image=start_img,
+                aspect_ratio=aspect_ratio,
+                is_4k=args.is_4k
+            )
+            soundscape_info = screenplay.get("soundscape", {})
+            soundscape_playlist = soundscape_info.get("soundscape_playlist")
+            if not soundscape_playlist and soundscape_info.get("ambient_track"):
+                soundscape_playlist = [{"type": soundscape_info.get("ambient_track"), "volume": 0.12}]
+
             sub_status = f"with subtitles [{args.subtitle_palette}]" if burn_subtitles else "no subtitles"
-            print(f"⚙️  [5/5] Compiling master documentary video with acoustic score ({sub_status})...")
-            real_compiler.compile_real_video(scenes, bg_music_wav, output_mp4, global_topic=combined_topic, burn_subtitles=burn_subtitles, language=lang, palette_key=args.subtitle_palette)
+            print(f"⚙️  [5/5] Compiling master documentary video with acoustic score ({sub_status}, transition={transition}, grade={color_grade})...")
+            real_compiler.compile_real_video(
+                scenes,
+                bg_music_wav,
+                output_mp4,
+                global_topic=combined_topic,
+                burn_subtitles=burn_subtitles,
+                language=lang,
+                palette_key=args.subtitle_palette,
+                transition=transition,
+                color_grade=color_grade,
+                music_volume=args.music_volume,
+                soundscape_playlist=soundscape_playlist
+            )
             print(f"🎉 MASTER REAL VIDEO GENERATED: {output_mp4}")
         else:
             # --- SLIDE/GRAPHICS VIDEO PIPELINE ---
             print(f"🎨 [4/5] Rendering {dim_str} slide frames ({lang_display} typography)...")
-            renderer = SlideRenderer(theme=theme_palette, is_shorts=is_shorts)
+            renderer = SlideRenderer(
+                theme=theme_palette,
+                is_shorts=is_shorts,
+                aspect_ratio=aspect_ratio,
+                is_4k=args.is_4k
+            )
             slide_paths = []
             for i, scene in enumerate(scenes):
                 out_slide = slides_dir / f"{scene['id']}.png"
@@ -385,9 +517,27 @@ def main():
                 slide_paths.append(out_slide)
             print(f"✓ Rendered {len(slide_paths)} {dim_str} slide frames")
 
-            print(f"⚙️  [5/5] Compiling master {dim_str} MP4 with FFMPEG...")
-            compiler = VideoCompiler(work_dir, is_cinema=is_cinema, is_shorts=is_shorts, character=character)
-            compiler.compile(scenes, slide_paths, bg_music_wav, output_mp4, language=lang, burn_subtitles=burn_subtitles, palette_key=args.subtitle_palette)
+            print(f"⚙️  [5/5] Compiling master {dim_str} MP4 with FFMPEG (transition={transition}, grade={color_grade})...")
+            compiler = VideoCompiler(
+                work_dir,
+                is_cinema=is_cinema,
+                is_shorts=is_shorts,
+                character=character,
+                aspect_ratio=aspect_ratio,
+                is_4k=args.is_4k
+            )
+            compiler.compile(
+                scenes,
+                slide_paths,
+                bg_music_wav,
+                output_mp4,
+                language=lang,
+                burn_subtitles=burn_subtitles,
+                palette_key=args.subtitle_palette,
+                transition=transition,
+                color_grade=color_grade,
+                music_volume=args.music_volume
+            )
             print(f"🎉 MASTER VIDEO GENERATED: {output_mp4}")
 
         # Digital Human Talking Avatar Overlay (LivePortrait / Duix-Avatar)

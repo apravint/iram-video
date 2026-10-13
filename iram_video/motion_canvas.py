@@ -59,16 +59,74 @@ CORRIDOR_PRESETS = {
 }
 
 
+def detect_code_language(text: str, topic: str = "") -> Tuple[str, str]:
+    """Detects programming language and file extension from text context."""
+    comb = f"{text} {topic}".lower()
+    if any(k in comb for k in ["c++", "cpp", "clang"]):
+        return "cpp", "engine.cpp"
+    if any(k in comb for k in ["rust", "cargo", "tokio", "actix"]):
+        return "rust", "main.rs"
+    if any(k in comb for k in ["golang", "goroutine"]) or bool(re.search(r"\b(go|gin)\b", comb)):
+        return "go", "server.go"
+    if any(k in comb for k in ["python", "fastapi", "django", "pytorch", "pandas", "numpy", "flask"]) or bool(re.search(r"\bpy\b", comb)):
+        return "python", "service.py"
+    if any(k in comb for k in ["typescript", "react", "nextjs", "vue", "javascript", "node"]) or bool(re.search(r"\b(ts|js)\b", comb)):
+        return "typescript", "index.ts"
+    if any(k in comb for k in ["sql", "postgres", "mysql", "sqlite"]) or bool(re.search(r"\b(database|query)\b", comb)):
+        return "sql", "query.sql"
+    if any(k in comb for k in ["bash", "shell", "terminal", "linux"]) or bool(re.search(r"\b(cli|script)\b", comb)):
+        return "bash", "deploy.sh"
+    if any(k in comb for k in ["docker", "k8s", "kubernetes", "dockerfile"]):
+        return "docker", "compose.yml"
+    if any(k in comb for k in ["java", "spring", "jvm", "loom", "graalvm"]):
+        return "java", "EnterpriseService.java"
+    return "software", "architecture.yaml"
+
+
 def classify_semantic_beat(phrase: str, global_topic: str = "") -> Dict[str, Any]:
     """
-    Classifies a spoken phrase or beat into 'metric_card', 'route_map', or 'real_media'.
+    Classifies a spoken phrase or beat into 'listicle_card', 'step_card', 'comparison_card',
+    'quote_card', 'code_card', 'metric_card', 'route_map', or 'real_media'.
     Extracts relevant structural metadata for programmatic rendering.
     """
     text = (phrase or "").strip()
     t_low = text.lower()
     top_low = (global_topic or "").lower()
 
-    # 1. Route Map / Corridor Detection
+    # 1. Top-N Listicle & Countdown Detection (#1, #2, rank, top 5, winner)
+    rank_m = re.search(r'(?:#|rank\s*|number\s*|no\.?\s*)(\d+)', t_low)
+    if rank_m or any(k in t_low for k in ["winner", "top choice", "#1 winner", "number one"]):
+        rank_num = int(rank_m.group(1)) if rank_m else 1
+        is_winner = rank_num == 1 or "winner" in t_low or "#1" in t_low
+        return {
+            "beat_type": "listicle_card",
+            "rank": rank_num,
+            "badge": "#1 WINNER" if is_winner else f"#{rank_num}",
+            "headline": text[:60],
+            "phrase": text
+        }
+
+    # 2. Tutorial Step & Workflow Detection (Step 1, Step 2, Phase 1, Setup, Verification)
+    step_m = re.search(r'(?:step|stage|phase)\s*(\d+)', t_low)
+    if step_m or any(k in t_low for k in ["first,", "second,", "step one", "step two", "prerequisite", "how to install"]):
+        step_num = int(step_m.group(1)) if step_m else 1
+        return {
+            "beat_type": "step_card",
+            "step": step_num,
+            "badge": f"STEP {step_num:02d}",
+            "headline": text[:60],
+            "phrase": text
+        }
+
+    # 3. Head-to-Head Comparison Detection (vs, versus, compared to)
+    if any(k in t_low for k in [" vs ", " versus ", " compared to ", " match up "]):
+        return {
+            "beat_type": "comparison_card",
+            "headline": text[:60],
+            "phrase": text
+        }
+
+    # 4. Route Map / Transit Corridor Detection
     c3_match = any(k in t_low for k in ["corridor 3", "பாதை 3", "தடம் 3", "madhavaram to sipcot", "மாதவரம் முதல் சிப்காட்", "மாதவரம்"])
     c4_match = any(k in t_low for k in ["corridor 4", "பாதை 4", "தடம் 4", "lighthouse", "poonamallee", "கலங்கரை விளக்கம்", "பூந்தமல்லி"])
     c5_match = any(k in t_low for k in ["corridor 5", "பாதை 5", "தடம் 5", "sholinganallur", "சோழிங்கநல்லூர்"])
@@ -95,13 +153,12 @@ def classify_semantic_beat(phrase: str, global_topic: str = "") -> Dict[str, Any
             "phrase": text
         }
 
-    # 2. Metric Card / Statistical Infographic Detection
-    # Look for prominent numbers with units (km, stations, crore, %, etc.)
+    # 5. Metric Card / Statistical Infographic Detection
     num_patterns = [
         r'(\d+[\.,]?\d*)\s*(?:கி\.மீ|km|kilometers?)',
         r'(\d+)\s*(?:நிலையங்கள்|stations?)',
-        r'(?:₹|ரூபாய்|rs\.?)\s*(\d+[\.,]?\d*)\s*(?:கோடி|crores?)?',
-        r'(\d+[\.,]?\d*)\s*(?:கோடி|crores?|cr)',
+        r'(?:₹|ரூபாய்|rs\.?|\$|€)\s*(\d+[\.,]?\d*)\s*(?:கோடி|crores?|billion|million)?',
+        r'(\d+[\.,]?\d*)\s*(?:கோடி|crores?|cr|billion|million|x\b)',
         r'(\d+[\.,]?\d*)\s*%',
         r'(\d+)\s*(?:புதிய பாதைகள்|corridors?|lines?)',
         r'(\d+)\s*(?:ரயில்கள்|trains?|coaches?)'
@@ -116,7 +173,6 @@ def classify_semantic_beat(phrase: str, global_topic: str = "") -> Dict[str, Any
             except ValueError:
                 num_val = 100.0
 
-            # Derive unit and label
             matched_segment = m.group(0)
             if any(u in matched_segment.lower() for u in ["km", "கி.மீ", "kilometer"]):
                 unit = "KM / கி.மீ"
@@ -130,9 +186,13 @@ def classify_semantic_beat(phrase: str, global_topic: str = "") -> Dict[str, Any
                 unit = "CRORES / கோடி"
                 label = "PROJECT BUDGET"
                 label_ta = "திட்ட மதிப்பீடு"
+            elif any(u in matched_segment.lower() for u in ["$", "€", "billion", "million"]):
+                unit = "USD / VALUATION"
+                label = "MARKET VALUE"
+                label_ta = "மதிப்பீடு"
             elif "%" in matched_segment:
                 unit = "%"
-                label = "PROGRESS RATE"
+                label = "GROWTH & PROGRESS"
                 label_ta = "பணிகள் முன்னேற்றம்"
             elif any(u in matched_segment.lower() for u in ["corridor", "பாதை"]):
                 unit = "CORRIDORS"
@@ -152,22 +212,29 @@ def classify_semantic_beat(phrase: str, global_topic: str = "") -> Dict[str, Any
                 "phrase": text
             }
 
-    # 3. Code & Technical Architecture Card Detection
+    # 6. Multi-Language Code & Architecture Card Detection
     code_triggers = [
-        "java", "spring boot", "springboot", "virtual thread", "project loom",
-        "graalvm", "microservice", "controller", "dependency injection",
-        "syntax", "rest api", "xml configuration", "backend code",
-        "concurrency", "thread pool", "garbage collection"
+        "python", "rust", "golang", "go code", "typescript", "javascript", "react",
+        "sql", "postgres", "database query", "bash", "linux terminal", "docker",
+        "kubernetes", "c++", "cpp", "java", "spring boot", "springboot", "api",
+        "virtual thread", "project loom", "graalvm", "microservice", "controller",
+        "dependency injection", "syntax", "rest api", "backend code", "concurrency"
     ]
-    if any(k in t_low for k in code_triggers) or (top_low and any(k in top_low for k in ["java", "spring", "code", "programming", "software"]) and any(k in t_low for k in ["performance", "memory", "compile", "scale", "system", "application", "cloud", "service"])):
+    is_code_beat = any(k in t_low for k in code_triggers)
+    is_code_topic = top_low and any(k in top_low for k in ["code", "programming", "software", "developer", "api", "python", "rust", "java", "sql"]) and any(k in t_low for k in ["function", "class", "deploy", "server", "memory", "compile", "scale", "query", "endpoint"])
+
+    if is_code_beat or is_code_topic:
+        lang, fname = detect_code_language(text, global_topic)
         return {
             "beat_type": "code_card",
             "headline": text[:60],
             "phrase": text,
-            "topic": "java" if ("java" in t_low or "spring" in t_low or "java" in top_low) else "software"
+            "language": lang,
+            "filename": fname,
+            "topic": lang
         }
 
-    # 4. Default: Real Media (curated authentic B-roll or AI video)
+    # 7. Default: Real Media (curated authentic stock B-roll or generative AI video)
     return {
         "beat_type": "real_media",
         "phrase": text
@@ -526,6 +593,137 @@ class MotionCanvas:
         return out_path
 
     @classmethod
+    def get_code_snippet_for_language(cls, lang: str, phrase: str = "") -> Tuple[str, List[Tuple[str, Tuple[int, int, int]]], str, str]:
+        c_white = (248, 250, 252)
+        c_purple = (168, 85, 247)
+        c_sky = (56, 189, 248)
+        c_green = (34, 197, 94)
+        c_amber = (245, 158, 11)
+        c_gray = (148, 163, 184)
+
+        if lang == "python":
+            lines = [
+                ("@app.get(\"/api/v1/stream\")", c_purple),
+                ("async def process_stream(query: QueryModel):", c_sky),
+                ("    async with AIClient(timeout=30) as client:", c_white),
+                ("        result = await client.generate_pipeline(query.prompt)", c_gray),
+                ("        metrics = await Telemetry.record(result.tokens)", c_gray),
+                ("        return {\"status\": \"ok\", \"data\": result, \"metrics\": metrics}", c_green),
+                ("    # Clean graceful completion", c_gray),
+            ]
+            return "service.py", lines, "● RUNNING: PYTHON 3.12+ • ASYNCIO EVENT LOOP ACTIVE", "python"
+
+        elif lang == "rust":
+            lines = [
+                ("#[tokio::main]", c_purple),
+                ("async fn main() -> Result<(), Box<dyn Error>> {", c_sky),
+                ("    let mut client = ClusterClient::connect(\"127.0.0.1:9092\").await?;", c_white),
+                ("    let stream = client.subscribe_topics(&[\"telemetry\"]).await?;", c_gray),
+                ("    while let Some(msg) = stream.next().await {", c_purple),
+                ("        tokio::spawn(async move { process_frame(msg).await });", c_sky),
+                ("    }", c_white),
+                ("    Ok(())", c_green),
+                ("}", c_white),
+            ]
+            return "main.rs", lines, "● COMPILED: RUSTC 1.80+ • ZERO-COST ABSTRACTIONS ACTIVE", "rust"
+
+        elif lang == "go":
+            lines = [
+                ("func HandleStream(w http.ResponseWriter, r *http.Request) {", c_sky),
+                ("    ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)", c_white),
+                ("    defer cancel()", c_purple),
+                ("    ch := make(chan Response, 64)", c_white),
+                ("    go workerPool.Dispatch(ctx, ch)", c_sky),
+                ("    res := <-ch", c_gray),
+                ("    w.Header().Set(\"Content-Type\", \"application/json\")", c_amber),
+                ("    json.NewEncoder(w).Encode(res)", c_green),
+                ("}", c_white),
+            ]
+            return "server.go", lines, "● RUNNING: GO 1.23+ • GOROUTINES DISPATCHED", "go"
+
+        elif lang in ("typescript", "javascript"):
+            lines = [
+                ("interface PipelineConfig {", c_purple),
+                ("  endpoint: string; maxRetries: number; concurrency: number;", c_white),
+                ("}", c_purple),
+                ("export async function runPipeline(cfg: PipelineConfig): Promise<Result> {", c_sky),
+                ("  const controller = new AbortController();", c_white),
+                ("  const res = await fetch(cfg.endpoint, { signal: controller.signal });", c_gray),
+                ("  const payload = await res.json();", c_gray),
+                ("  return { status: 200, data: payload, timestamp: Date.now() };", c_green),
+                ("}", c_white),
+            ]
+            return "pipeline.ts", lines, "● RUNNING: NODE / BUN • TYPESCRIPT COMPILED", "typescript"
+
+        elif lang == "sql":
+            lines = [
+                ("WITH active_pipeline_metrics AS (", c_purple),
+                ("  SELECT region_id, COUNT(*) AS tx_volume, AVG(latency_ms) AS avg_lat", c_sky),
+                ("  FROM telemetry_events", c_white),
+                ("  WHERE created_at >= NOW() - INTERVAL '1 hour'", c_gray),
+                ("  GROUP BY region_id", c_purple),
+                (")", c_purple),
+                ("SELECT region_id, tx_volume, avg_lat", c_white),
+                ("FROM active_pipeline_metrics ORDER BY tx_volume DESC LIMIT 10;", c_green),
+            ]
+            return "analytics.sql", lines, "● QUERY EXECUTION: POSTGRESQL 16 • INDEX SCAN ACCELERATED", "sql"
+
+        elif lang == "bash":
+            lines = [
+                ("#!/usr/bin/env bash", c_gray),
+                ("set -euo pipefail", c_purple),
+                ("echo \"[1/3] Validating cluster configuration...\"", c_sky),
+                ("docker compose -f docker-compose.prod.yml up -d --build", c_white),
+                ("kubectl rollout status deployment/core-engine --timeout=60s", c_amber),
+                ("echo \"[✓] Production deployment complete with zero downtime.\"", c_green),
+            ]
+            return "deploy.sh", lines, "● SHELL ENVIRONMENT: BASH 5.2 • PIPELINE EXECUTED", "bash"
+
+        elif lang == "docker":
+            lines = [
+                ("services:", c_purple),
+                ("  api-gateway:", c_white),
+                ("    image: enterprise/gateway:latest", c_sky),
+                ("    deploy: { replicas: 8, restart_policy: { condition: on-failure } }", c_gray),
+                ("  core-engine:", c_white),
+                ("    image: enterprise/engine:v3", c_sky),
+                ("    environment: [\"PRODUCTION=true\", \"WORKERS=16\"]", c_amber),
+                ("    healthcheck: { test: [\"CMD\", \"curl\", \"-f\", \"/health\"], interval: 10s }", c_green),
+            ]
+            return "docker-compose.yml", lines, "● CONTAINER ENGINE: DOCKER / K8S • HEALTHY", "docker"
+
+        elif lang == "cpp":
+            lines = [
+                ("#include <memory>", c_purple),
+                ("template<typename T>", c_purple),
+                ("class LockFreeRingBuffer {", c_sky),
+                ("    std::atomic<size_t> head_{0}, tail_{0};", c_white),
+                ("public:", c_purple),
+                ("    bool push(const T& item) noexcept {", c_sky),
+                ("        // Zero-copy high-throughput lock-free enqueue", c_gray),
+                ("        return true;", c_green),
+                ("    }", c_white),
+                ("};", c_white),
+            ]
+            return "ring_buffer.hpp", lines, "● COMPILED: CLANG 18 -O3 • LOCK-FREE CONCURRENCY", "cpp"
+
+        else: # java default
+            lines = [
+                ("@SpringBootApplication", c_purple),
+                ("public class EnterpriseService {", c_white),
+                ("    @Bean", c_purple),
+                ("    public TomcatProtocolHandlerCustomizer<?> protocol() {", c_sky),
+                ("        return p -> p.setExecutor(Executors.newVirtualThreadPerTaskExecutor());", c_gray),
+                ("    }", c_white),
+                ("    @GetMapping(\"/api/v1/scale\")", c_purple),
+                ("    public ResponseEntity<Metrics> getMetrics() {", c_sky),
+                ("        return ResponseEntity.ok(Metrics.virtualThreadScale());", c_green),
+                ("    }", c_white),
+                ("}", c_white),
+            ]
+            return "EnterpriseService.java", lines, "● RUNNING: JVM 21+ • VIRTUAL THREADS ACTIVE", "java"
+
+    @classmethod
     def render_code_card(
         cls,
         beat: Dict[str, Any],
@@ -535,7 +733,7 @@ class MotionCanvas:
     ) -> Path:
         """
         Renders a broadcast-quality animated code editor / architecture card with syntax highlighting
-        and smooth progressive typing/highlight animation.
+        and smooth progressive typing/highlight animation across Python, Rust, Go, TS, SQL, Bash, and Java.
         """
         w = 1080 if is_shorts else 1920
         h = 1920 if is_shorts else 1080
@@ -549,7 +747,6 @@ class MotionCanvas:
         c_sky = (56, 189, 248)
         c_purple = (168, 85, 247)
         c_green = (34, 197, 94)
-        c_amber = (245, 158, 11)
         c_gray = (148, 163, 184)
         c_dim = (71, 85, 105)
 
@@ -560,37 +757,12 @@ class MotionCanvas:
         fta_code, fen_code = get_fonts(18 if is_shorts else 22, bold=False)
         fta_sm, fen_sm = get_fonts(16 if is_shorts else 18, bold=False)
 
-        topic = beat.get("topic", "java")
-        phrase = beat.get("phrase", "Enterprise Java Architecture")
+        lang_req = beat.get("language") or beat.get("topic") or "software"
+        phrase = beat.get("phrase", "Software Architecture")
 
-        if topic == "java":
-            code_lines = [
-                ("@SpringBootApplication", c_purple),
-                ("public class EnterpriseService {", c_white),
-                ("    @Bean", c_purple),
-                ("    public TomcatProtocolHandlerCustomizer<?> protocol() {", c_sky),
-                ("        return p -> p.setExecutor(Executors.newVirtualThreadPerTaskExecutor());", c_gray),
-                ("    }", c_white),
-                ("    @GetMapping(\"/api/v1/scale\")", c_purple),
-                ("    public ResponseEntity<Metrics> getMetrics() {", c_sky),
-                ("        return ResponseEntity.ok(Metrics.virtualThreadScale());", c_gray),
-                ("    }", c_white),
-                ("}", c_white),
-            ]
-            win_title = "EnterpriseService.java"
-        else:
-            code_lines = [
-                ("services:", c_purple),
-                ("  api-gateway:", c_white),
-                ("    image: enterprise/gateway:latest", c_sky),
-                ("    deploy: { replicas: 8 }", c_gray),
-                ("  spring-microservice:", c_white),
-                ("    image: enterprise/core-engine:v3", c_sky),
-                ("    environment:", c_purple),
-                ("      - JAVA_OPTS=-XX:+UseZGC -XX:+EnableVirtualThreads", c_amber),
-                ("    healthcheck: { test: [\"CMD\", \"curl\", \"-f\", \"/actuator/health\"] }", c_green),
-            ]
-            win_title = "docker-compose.architecture.yml"
+        win_title, code_lines, status_txt, _ = cls.get_code_snippet_for_language(lang_req, phrase)
+        if beat.get("filename"):
+            win_title = beat["filename"]
 
         proc = cls._create_ffmpeg_writer(out_path, w, h, fps)
 
@@ -649,7 +821,6 @@ class MotionCanvas:
                     draw.rectangle([(cursor_x, cy - 2), (cursor_x + 10, cy + 20)], fill=c_sky)
 
                 # Status pill at bottom
-                status_txt = "● RUNNING: JVM 21+ • VIRTUAL THREADS ACTIVE"
                 draw_mixed_line(draw, card_x1 + 28, card_y2 - 36, status_txt, c_green, fta_sm, fen_sm)
 
                 proc.stdin.write(img.tobytes())
@@ -675,3 +846,292 @@ class MotionCanvas:
                 proc.wait()
 
         return out_path
+
+    @classmethod
+    def render_listicle_card(
+        cls,
+        beat: Dict[str, Any],
+        out_path: Path,
+        duration: float = 4.0,
+        is_shorts: bool = False
+    ) -> Path:
+        """
+        Renders a dynamic countdown listicle card with glowing rank badge (#1 WINNER, #2, etc.),
+        headline, progress bar, and key takeaways.
+        """
+        w = 1080 if is_shorts else 1920
+        h = 1920 if is_shorts else 1080
+        fps = 30
+        total_frames = max(30, int(round(duration * fps)))
+
+        c_bg = (15, 23, 42)
+        c_card = (30, 41, 59)
+        c_accent = (59, 130, 246)
+        c_gold = (245, 158, 11)
+        c_white = (248, 250, 252)
+        c_muted = (148, 163, 184)
+
+        card_x1, card_y1 = (80, 500) if is_shorts else (320, 200)
+        card_x2, card_y2 = (1000, 1420) if is_shorts else (1600, 880)
+
+        badge_text = beat.get("badge", "#1 WINNER")
+        phrase = beat.get("phrase", "Top Contender")
+        rank = beat.get("rank", 1)
+
+        fta_badge, fen_badge = get_fonts(28 if is_shorts else 36, bold=True)
+        fta_head, fen_head = get_fonts(28 if is_shorts else 38, bold=True)
+        fta_sub, fen_sub = get_fonts(20 if is_shorts else 24, bold=False)
+
+        proc = cls._create_ffmpeg_writer(out_path, w, h, fps)
+        try:
+            for frame_idx in range(total_frames):
+                p = frame_idx / float(total_frames - 1) if total_frames > 1 else 1.0
+                eased = 1.0 - math.pow(1.0 - p, 3)
+
+                img = Image.new("RGB", (w, h), c_bg)
+                draw = ImageDraw.Draw(img)
+
+                # Background dots
+                step = 60 if is_shorts else 80
+                for gx in range(step // 2, w, step):
+                    for gy in range(step // 2, h, step):
+                        draw.point((gx, gy), fill=(30, 42, 65))
+
+                # Card box
+                draw.rounded_rectangle([(card_x1, card_y1), (card_x2, card_y2)], radius=14, fill=c_card, outline=(51, 65, 85), width=2)
+
+                # Top Rank Pill
+                pill_col = c_gold if (rank == 1 or "winner" in badge_text.lower()) else c_accent
+                draw.rounded_rectangle([(card_x1 + 40, card_y1 + 40), (card_x1 + 320, card_y1 + 95)], radius=8, fill=(15, 23, 42), outline=pill_col, width=2)
+                draw_mixed_line(draw, card_x1 + 60, card_y1 + 48, badge_text, pill_col, fta_badge, fen_badge)
+
+                # Main Headline
+                hy = card_y1 + 130
+                wrapped_hl = wrap_text(phrase, fta_head, fen_head, (card_x2 - card_x1 - 80), draw)
+                for line in wrapped_hl[:3]:
+                    draw_mixed_line(draw, card_x1 + 40, hy, line, c_white, fta_head, fen_head)
+                    hy += 46
+
+                # Animated Growth Bar
+                by = hy + 30
+                max_w = card_x2 - card_x1 - 80
+                draw.rectangle([(card_x1 + 40, by), (card_x1 + 40 + max_w, by + 10)], fill=(20, 30, 48))
+                draw.rectangle([(card_x1 + 40, by), (card_x1 + 40 + int(max_w * eased), by + 10)], fill=pill_col)
+
+                # Evaluation criteria
+                tag_y = by + 30
+                draw_mixed_line(draw, card_x1 + 40, tag_y, "★ VERIFIED HIGH PERFORMANCE & ARCHITECTURAL IMPACT", c_muted, fta_sub, fen_sub)
+
+                proc.stdin.write(img.tobytes())
+
+            proc.stdin.close()
+            proc.wait()
+        except Exception:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait()
+            raise
+        finally:
+            if proc.stdin and not proc.stdin.closed:
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                proc.wait()
+
+        return out_path
+
+    @classmethod
+    def render_step_card(
+        cls,
+        beat: Dict[str, Any],
+        out_path: Path,
+        duration: float = 4.0,
+        is_shorts: bool = False
+    ) -> Path:
+        """
+        Renders an instructional tutorial step card with step counter badge and actionable instructions.
+        """
+        w = 1080 if is_shorts else 1920
+        h = 1920 if is_shorts else 1080
+        fps = 30
+        total_frames = max(30, int(round(duration * fps)))
+
+        c_bg = (15, 23, 42)
+        c_card = (24, 34, 53)
+        c_blue = (59, 130, 246)
+        c_green = (34, 197, 94)
+        c_white = (248, 250, 252)
+        c_muted = (148, 163, 184)
+
+        card_x1, card_y1 = (80, 500) if is_shorts else (320, 200)
+        card_x2, card_y2 = (1000, 1420) if is_shorts else (1600, 880)
+
+        badge_text = beat.get("badge", "STEP 01")
+        phrase = beat.get("phrase", "Step Action")
+
+        fta_b, fen_b = get_fonts(24 if is_shorts else 30, bold=True)
+        fta_h, fen_h = get_fonts(28 if is_shorts else 36, bold=True)
+        fta_p, fen_p = get_fonts(20 if is_shorts else 24, bold=False)
+
+        proc = cls._create_ffmpeg_writer(out_path, w, h, fps)
+        try:
+            for frame_idx in range(total_frames):
+                p = frame_idx / float(total_frames - 1) if total_frames > 1 else 1.0
+
+                img = Image.new("RGB", (w, h), c_bg)
+                draw = ImageDraw.Draw(img)
+
+                # Grid
+                grid_step = 60 if is_shorts else 80
+                for gx in range(0, w, grid_step):
+                    draw.line([(gx, 0), (gx, h)], fill=(22, 32, 50), width=1)
+                for gy in range(0, h, grid_step):
+                    draw.line([(0, gy), (w, gy)], fill=(22, 32, 50), width=1)
+
+                draw.rounded_rectangle([(card_x1, card_y1), (card_x2, card_y2)], radius=12, fill=c_card, outline=(51, 65, 85), width=2)
+
+                # Step Pill
+                draw.rounded_rectangle([(card_x1 + 40, card_y1 + 40), (card_x1 + 260, card_y1 + 95)], radius=6, fill=(15, 23, 42), outline=c_blue, width=1)
+                draw_mixed_line(draw, card_x1 + 60, card_y1 + 52, f"● {badge_text}", c_blue, fta_b, fen_b)
+
+                # Step instruction headline
+                hy = card_y1 + 130
+                wrapped_hl = wrap_text(phrase, fta_h, fen_h, (card_x2 - card_x1 - 80), draw)
+                for line in wrapped_hl[:3]:
+                    draw_mixed_line(draw, card_x1 + 40, hy, line, c_white, fta_h, fen_h)
+                    hy += 45
+
+                # Terminal action callout
+                callout_y = hy + 30
+                draw.rectangle([(card_x1 + 40, callout_y), (card_x2 - 40, callout_y + 90)], fill=(15, 23, 42), outline=(51, 65, 85), width=1)
+                draw_mixed_line(draw, card_x1 + 65, callout_y + 20, "$ execute --verify --production", (56, 189, 248), fta_p, fen_p)
+                draw_mixed_line(draw, card_x1 + 65, callout_y + 54, "[✓] Process initialized successfully", c_green, fta_p, fen_p)
+
+                # Bottom status
+                draw_mixed_line(draw, card_x1 + 40, card_y2 - 50, "● WORKFLOW STAGE ACTIVE • VERIFIED STEPS", c_muted, fta_p, fen_p)
+
+                proc.stdin.write(img.tobytes())
+
+            proc.stdin.close()
+            proc.wait()
+        except Exception:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait()
+            raise
+        finally:
+            if proc.stdin and not proc.stdin.closed:
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                proc.wait()
+
+        return out_path
+
+    @classmethod
+    def render_comparison_card(
+        cls,
+        beat: Dict[str, Any],
+        out_path: Path,
+        duration: float = 4.0,
+        is_shorts: bool = False
+    ) -> Path:
+        """
+        Renders a head-to-head comparison matchup card contrasting two options side-by-side.
+        """
+        w = 1080 if is_shorts else 1920
+        h = 1920 if is_shorts else 1080
+        fps = 30
+        total_frames = max(30, int(round(duration * fps)))
+
+        c_bg = (15, 23, 42)
+        c_white = (248, 250, 252)
+        c_blue = (59, 130, 246)
+        c_amber = (245, 158, 11)
+        c_green = (34, 197, 94)
+
+        phrase = beat.get("phrase", "Contender A vs Contender B")
+        tokens = [t.strip() for t in re.split(r'\b(?:vs|versus)\b', phrase, flags=re.IGNORECASE) if t.strip()]
+        side_a = tokens[0][:40] if len(tokens) >= 1 else "Traditional"
+        side_b = tokens[1][:40] if len(tokens) >= 2 else "Modernized"
+
+        fta_head, fen_head = get_fonts(26 if is_shorts else 32, bold=True)
+        fta_col, fen_col = get_fonts(22 if is_shorts else 28, bold=True)
+        fta_txt, fen_txt = get_fonts(18 if is_shorts else 20, bold=False)
+
+        proc = cls._create_ffmpeg_writer(out_path, w, h, fps)
+        try:
+            for frame_idx in range(total_frames):
+                img = Image.new("RGB", (w, h), c_bg)
+                draw = ImageDraw.Draw(img)
+
+                # Header
+                draw_mixed_line(draw, 100 if not is_shorts else 60, 80 if not is_shorts else 140, "HEAD-TO-HEAD COMPARISON", c_blue, fta_head, fen_head)
+
+                if not is_shorts:
+                    # Landscape Dual Columns
+                    col_y, col_h = 180, 720
+                    # Left column
+                    draw.rounded_rectangle([(100, col_y), (920, col_y + col_h)], radius=12, fill=(24, 34, 53), outline=(51, 65, 85), width=2)
+                    draw_mixed_line(draw, 140, col_y + 40, side_a, c_white, fta_col, fen_col)
+                    draw.line([(140, col_y + 90), (880, col_y + 90)], fill=(51, 65, 85), width=1)
+                    draw_mixed_line(draw, 140, col_y + 130, "• Legacy Architecture & Higher Overhead", (148, 163, 184), fta_txt, fen_txt)
+                    draw_mixed_line(draw, 140, col_y + 180, "• Complex Manual Scaling Requirements", (148, 163, 184), fta_txt, fen_txt)
+                    draw_mixed_line(draw, 140, col_y + 230, "• Traditional Thread Pool Allocation", (148, 163, 184), fta_txt, fen_txt)
+
+                    # Right column
+                    draw.rounded_rectangle([(1000, col_y), (1820, col_y + col_h)], radius=12, fill=(24, 34, 53), outline=c_blue, width=2)
+                    draw_mixed_line(draw, 1040, col_y + 40, side_b, c_white, fta_col, fen_col)
+                    draw.line([(1040, col_y + 90), (1780, col_y + 90)], fill=c_blue, width=1)
+                    draw_mixed_line(draw, 1040, col_y + 130, "✓ Ultra-Low Latency & Memory Footprint", c_green, fta_txt, fen_txt)
+                    draw_mixed_line(draw, 1040, col_y + 180, "✓ Automated Elastic Concurrency Scaling", c_green, fta_txt, fen_txt)
+                    draw_mixed_line(draw, 1040, col_y + 230, "✓ Modern Zero-Copy Telemetry Out of Box", c_green, fta_txt, fen_txt)
+                else:
+                    # Vertical Stacked Columns
+                    card_w = 920
+                    draw.rounded_rectangle([(80, 260), (80 + card_w, 780)], radius=10, fill=(24, 34, 53), outline=(51, 65, 85), width=2)
+                    draw_mixed_line(draw, 110, 290, side_a, c_white, fta_col, fen_col)
+                    draw_mixed_line(draw, 110, 360, "• Traditional System Setup", (148, 163, 184), fta_txt, fen_txt)
+                    draw_mixed_line(draw, 110, 420, "• Standard Resource Scaling", (148, 163, 184), fta_txt, fen_txt)
+
+                    draw.rounded_rectangle([(80, 840), (80 + card_w, 1360)], radius=10, fill=(24, 34, 53), outline=c_blue, width=2)
+                    draw_mixed_line(draw, 110, 870, side_b, c_white, fta_col, fen_col)
+                    draw_mixed_line(draw, 110, 940, "✓ Optimized Next-Gen Workflow", c_green, fta_txt, fen_txt)
+                    draw_mixed_line(draw, 110, 1000, "✓ Cloud-Native High Concurrency", c_green, fta_txt, fen_txt)
+
+                proc.stdin.write(img.tobytes())
+
+            proc.stdin.close()
+            proc.wait()
+        except Exception:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait()
+            raise
+        finally:
+            if proc.stdin and not proc.stdin.closed:
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                proc.wait()
+
+        return out_path
+

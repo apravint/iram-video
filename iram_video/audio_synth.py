@@ -90,6 +90,31 @@ def synthesize_mood_track(mood: str, duration_sec: float, output_path: Path):
             [87.31, 130.81, 174.61, 261.63]   # Fmaj7
         ]
         chord_len = 10.0
+    elif mood in ["corporate", "business", "inspirational"]:
+        # Uplifting Corporate progression (G -> D -> Em -> C)
+        chords = [
+            [196.00, 246.94, 293.66, 392.00], # G
+            [146.83, 220.00, 293.66, 370.00], # D
+            [164.81, 196.00, 246.94, 329.63], # Em
+            [130.81, 164.81, 196.00, 261.63]  # C
+        ]
+        chord_len = 8.0
+    elif mood in ["energetic", "promo", "upbeat", "launch"]:
+        # Driving Tech / Promo progression (Am -> F -> C -> G)
+        chords = [
+            [220.00, 261.63, 329.63, 440.00], # Am
+            [174.61, 220.00, 261.63, 349.23], # F
+            [130.81, 164.81, 196.00, 261.63], # C
+            [196.00, 246.94, 293.66, 392.00]  # G
+        ]
+        chord_len = 6.0
+    elif mood in ["minimal", "subtle"]:
+        # Minimalist soft ambient (Cmaj9 -> Am9)
+        chords = [
+            [130.81, 164.81, 196.00, 293.66], # Cmaj9
+            [110.00, 164.81, 220.00, 246.94]  # Am9
+        ]
+        chord_len = 16.0
     elif mood == "lofi":
         # Warm Lofi progression (Am9 -> Dm9 -> G13 -> Cmaj7)
         chords = [

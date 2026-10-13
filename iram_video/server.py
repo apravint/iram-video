@@ -186,6 +186,58 @@ HTML_DASHBOARD = """<!DOCTYPE html>
         </div>
       </div>
 
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;" class="form-group">
+        <div>
+          <label>Genre Blueprint / Template:</label>
+          <select id="templateSelect">
+            <option value="">-- Freeform Editorial (Default) --</option>
+            <option value="explainer">💡 Deep-Dive Explainer</option>
+            <option value="tutorial">🛠️ Step-by-Step Tutorial</option>
+            <option value="listicle">🔢 Ranked Listicle / Countdown</option>
+            <option value="comparison">⚖️ Head-to-Head Comparison</option>
+            <option value="news">📰 Tech News / Product Release</option>
+            <option value="promo">🚀 SaaS / Startup Promo</option>
+            <option value="podcast">🎙️ Dual-Voice Studio Podcast</option>
+          </select>
+        </div>
+        <div>
+          <label>Aspect Ratio & Framing:</label>
+          <select id="ratioSelect">
+            <option value="auto">Auto (Matches Format)</option>
+            <option value="16:9">16:9 Landscape (YouTube / Desktop)</option>
+            <option value="9:16">9:16 Vertical (Shorts / Reels)</option>
+            <option value="1:1">1:1 Square (Instagram / LinkedIn)</option>
+            <option value="2.39:1">2.39:1 Cinema Scope (Widescreen)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;" class="form-group">
+        <div>
+          <label>Cinematic Scene Transition:</label>
+          <select id="transitionSelect">
+            <option value="fade">Dissolve / Crossfade</option>
+            <option value="wipeleft">Wipe Left</option>
+            <option value="slideleft">Slide Left</option>
+            <option value="circlecrop">Iris / Circle Crop</option>
+            <option value="smoothleft">Smooth Left Push</option>
+            <option value="fadeblack">Dip to Black</option>
+          </select>
+        </div>
+        <div>
+          <label>Cinematic Color Grade:</label>
+          <select id="gradeSelect">
+            <option value="auto">Auto Grade</option>
+            <option value="clean">Clean Enterprise</option>
+            <option value="documentary">Documentary Realism</option>
+            <option value="cinematic">Cinematic 35mm</option>
+            <option value="vintage">Vintage Film</option>
+            <option value="noir">Moody Noir</option>
+            <option value="vibrant">Vibrant Tech</option>
+          </select>
+        </div>
+      </div>
+
       <div style="display: flex; gap: 12px; margin-bottom: 20px;">
         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--text);">
           <input type="checkbox" id="steadyToggle" checked style="accent-color: var(--accent);"> Steady Camera (Disable lateral pan swings)
@@ -391,6 +443,10 @@ HTML_DASHBOARD = """<!DOCTYPE html>
       const language = document.getElementById('langSelect').value;
       const startImage = document.getElementById('startImagePath').value;
       const steadyCamera = document.getElementById('steadyToggle').checked;
+      const template = document.getElementById('templateSelect').value;
+      const aspectRatio = document.getElementById('ratioSelect').value;
+      const transition = document.getElementById('transitionSelect').value;
+      const colorGrade = document.getElementById('gradeSelect').value;
 
       btn.disabled = true;
       spinner.style.display = 'block';
@@ -400,7 +456,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
         const res = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, jsonDoc, mode, character, language, startImage, steadyCamera })
+          body: JSON.stringify({ prompt, jsonDoc, mode, character, language, startImage, steadyCamera, template, aspectRatio, transition, colorGrade })
         });
         const data = await res.json();
         if (data.status === 'success') {
@@ -466,6 +522,14 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps(items).encode("utf-8"))
+            return
+
+        if path == "/api/templates":
+            from iram_video.templates import VIDEO_TEMPLATES
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(VIDEO_TEMPLATES).encode("utf-8"))
             return
 
         if path == "/api/recent_videos":
@@ -627,9 +691,22 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
             start_image = payload.get("startImage")
             extend_video = payload.get("extendVideo")
             steady_camera = payload.get("steadyCamera", True)
+            template = payload.get("template")
+            aspect_ratio = payload.get("aspectRatio", "auto")
+            transition = payload.get("transition", "fade")
+            color_grade = payload.get("colorGrade", "auto")
 
             # Build command line
             cmd = [sys.executable, "-m", "iram_video.cli"]
+
+            if template:
+                cmd.extend(["--template", template])
+            if aspect_ratio and aspect_ratio != "auto":
+                cmd.extend(["--aspect-ratio", aspect_ratio])
+            if transition and transition != "fade":
+                cmd.extend(["--transition", transition])
+            if color_grade and color_grade != "auto":
+                cmd.extend(["--grade", color_grade])
 
             if mode == "real":
                 cmd.append("--real")

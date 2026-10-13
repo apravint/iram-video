@@ -6,12 +6,14 @@ and agentic storyboarding across episodic drama and animated narratives.
 """
 
 from typing import Dict, Any, List, Optional
+from .character_memory import CharacterVectorMemory
 
 class CharacterAnchorRegistry:
-    """Maintains strict visual consistency anchors for characters across all scenes."""
+    """Maintains strict visual consistency anchors for characters across all scenes using local Vector DB."""
 
-    def __init__(self):
+    def __init__(self, memory: Optional[CharacterVectorMemory] = None):
         self._characters: Dict[str, Dict[str, str]] = {}
+        self.memory = memory or CharacterVectorMemory()
 
     def register_character(
         self,
@@ -20,7 +22,9 @@ class CharacterAnchorRegistry:
         appearance: str,
         wardrobe: str,
         voice_id: str = "default",
-        traits: Optional[List[str]] = None
+        traits: Optional[List[str]] = None,
+        episode: int = 1,
+        seed: int = 42
     ) -> Dict[str, str]:
         key = name.lower().strip()
         anchor = {
@@ -33,12 +37,32 @@ class CharacterAnchorRegistry:
             "prompt_token": f"{appearance}, wearing {wardrobe}"
         }
         self._characters[key] = anchor
+
+        # Persist into Qdrant Vector DB for multi-day / multi-episode continuity
+        try:
+            self.memory.store_character_anchor(
+                character_name=name,
+                wardrobe=wardrobe,
+                facial_features=appearance,
+                style_signature=anchor["prompt_token"],
+                episode=episode,
+                seed=seed
+            )
+        except Exception:
+            pass
+
         return anchor
 
     def get_prompt_anchor(self, character_name: str) -> str:
         key = character_name.lower().strip()
         if key in self._characters:
             return self._characters[key]["prompt_token"]
+
+        # Check Qdrant Vector DB for historical actor anchor
+        hist = self.memory.find_consistent_anchor(character_name)
+        if hist and "style_signature" in hist:
+            return hist["style_signature"]
+
         return character_name
 
     def list_characters(self) -> List[Dict[str, str]]:

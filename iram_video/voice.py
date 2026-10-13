@@ -86,10 +86,14 @@ class VoiceSynthesizer:
         word_timings = []
         audio_bytes = bytearray()
 
+        active_voice = self.voice
+        if scene.get("voice"):
+            active_voice = VOICE_MAP.get(str(scene["voice"]).lower().strip(), scene["voice"])
+
         try:
             communicate = edge_tts.Communicate(
                 scene["narration"],
-                self.voice,
+                active_voice,
                 rate=self.rate,
                 boundary="WordBoundary"
             )
@@ -114,7 +118,7 @@ class VoiceSynthesizer:
         if not out_mp3.exists() or out_mp3.stat().st_size == 0:
             cmd = [
                 "edge-tts",
-                "--voice", self.voice,
+                "--voice", active_voice,
                 f"--rate={self.rate}",
                 "--text", scene["narration"],
                 "--write-media", str(out_mp3)

@@ -4,13 +4,17 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from .characters import CharacterRenderer
 from .subtitles import KineticSubtitleGenerator
+from .transitions import TransitionEngine
+from .color_grade import get_color_grade_filter
 
 class VideoCompiler:
-    def __init__(self, work_dir: Path, is_cinema: bool = False, is_shorts: bool = False, character: Optional[str] = None):
+    def __init__(self, work_dir: Path, is_cinema: bool = False, is_shorts: bool = False, character: Optional[str] = None, aspect_ratio: str = "16:9", is_4k: bool = False):
         self.work_dir = work_dir
         self.is_cinema = is_cinema
         self.is_shorts = is_shorts
         self.character = character
+        self.aspect_ratio = aspect_ratio
+        self.is_4k = is_4k
         self.clips_dir = work_dir / "clips"
         self.clips_dir.mkdir(parents=True, exist_ok=True)
         self.sprites_dir = work_dir / "char_sprites"
@@ -138,33 +142,42 @@ class VideoCompiler:
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return out_clip
 
-    def compile(self, scenes: List[Dict[str, Any]], slide_paths: List[Path], bg_music: Optional[Path], final_output: Path, language: str = "en", burn_subtitles: bool = True, palette_key: str = "auto"):
+    def compile(
+        self,
+        scenes: List[Dict[str, Any]],
+        slide_paths: List[Path],
+        bg_music: Optional[Path],
+        final_output: Path,
+        language: str = "en",
+        burn_subtitles: bool = True,
+        palette_key: str = "auto",
+        transition: str = "fade",
+        color_grade: str = "clean",
+        music_volume: float = 0.18
+    ):
         clip_paths = []
         for scene, slide in zip(scenes, slide_paths):
             c = self.render_clip(scene, slide)
             clip_paths.append(c)
 
-        # Write concat list
-        concat_txt = self.work_dir / "concat_list.txt"
-        with open(concat_txt, "w") as f:
-            for cp in clip_paths:
-                f.write(f"file '{cp.resolve()}'\n")
-
         raw_concat = self.work_dir / "raw_concat.mp4"
-        cmd_cat = [
-            "ffmpeg", "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", str(concat_txt),
-            "-c", "copy",
-            str(raw_concat)
-        ]
-        subprocess.run(cmd_cat, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        TransitionEngine.join_clips_with_transitions(
+            clip_paths,
+            raw_concat,
+            transition=transition,
+            trans_duration=0.45,
+            work_dir=self.work_dir
+        )
 
         total_duration = sum(float(s.get("duration", 4.0)) for s in scenes)
 
-        # Prepare Post-Filters: Kinetic Subtitles & Retention Progress Bar
+        # Prepare Post-Filters: Kinetic Subtitles, Color Grading & Retention Progress Bar
         v_filters = []
+
+        cg_filter = get_color_grade_filter(color_grade)
+        if cg_filter and cg_filter != "null":
+            v_filters.append(cg_filter)
+
         if self.is_shorts:
             # 1. Shorts retention progress bar (14px track + glowing cyan fill along bottom)
             v_filters.append("drawbox=x=0:y=1906:w=iw:h=14:color=black@0.45:t=fill")
@@ -183,7 +196,7 @@ class VideoCompiler:
                     v_filters.append(f"ass={ass_escaped}")
 
         # Broadcast Studio Audio Mastering (EBU R128 + Vocal Presence EQ + BGM Low-pass Ducking)
-        music_vol = 0.22 if self.is_cinema else 0.16
+        music_vol = max(0.02, min(1.0, float(music_volume)))
         filter_complex_list = []
         maps = []
 

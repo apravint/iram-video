@@ -15,24 +15,40 @@ from .soundscape import SoundscapeAdvisor
 from .b_roll import MediaFetcher
 from .ai_video import AIVideoEngine
 from .motion_canvas import MotionCanvas
+from .templates import VIDEO_TEMPLATES
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", stream=sys.stderr)
 
 TOOLS_METADATA = [
     {
         "name": "create_video",
-        "description": "Generates a complete broadcast-quality video or YouTube Short with voiceover, B-roll, score, and optional kinetic subtitles.",
+        "description": "Generates a complete broadcast-quality video or YouTube Short with voiceover, B-roll, score, transitions, and optional kinetic subtitles.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "prompt": {"type": "string", "description": "The topic, premise, or screenplay brief."},
+                "template": {"type": "string", "enum": list(VIDEO_TEMPLATES.keys()), "description": "High-level genre template ('explainer', 'tutorial', 'listicle', 'comparison', 'news', 'promo', 'podcast')."},
+                "aspect_ratio": {"type": "string", "enum": ["16:9", "9:16", "1:1", "2.39:1"], "default": "16:9", "description": "Aspect ratio ('16:9', '9:16', '1:1', '2.39:1')."},
                 "is_shorts": {"type": "boolean", "default": False, "description": "True for 9:16 vertical video (YouTube Shorts, Reels, TikTok); False for 16:9."},
                 "is_real": {"type": "boolean", "default": True, "description": "True for real YouTube documentary with verified B-roll and acoustic score."},
-                "music": {"type": "string", "default": "documentary", "description": "Music mood ('documentary', 'acoustic', 'tech', 'ambient', 'trailer')."},
+                "is_4k": {"type": "boolean", "default": False, "description": "Render in 4K UHD high resolution."},
+                "transition": {"type": "string", "enum": ["fade", "dissolve", "wipeleft", "wiperight", "slideleft", "slideright", "smoothleft", "circlecrop", "fadeblack", "fadewhite"], "default": "fade", "description": "Cinematic scene transition."},
+                "color_grade": {"type": "string", "enum": ["clean", "documentary", "cinematic", "vintage", "noir", "vibrant", "none"], "default": "clean", "description": "Cinematic color grading preset."},
+                "music": {"type": "string", "default": "documentary", "description": "Music mood ('documentary', 'acoustic', 'tech', 'ambient', 'trailer', 'corporate', 'energetic', 'minimal')."},
+                "bg_music": {"type": "string", "description": "Custom background music audio file path."},
+                "music_volume": {"type": "number", "default": 0.20, "description": "Background music ducking volume level (0.0 to 1.0)."},
                 "steady_camera": {"type": "boolean", "default": True, "description": "Subtle steady-cam micro-drift framing (zero dizzying pans)."},
                 "output_path": {"type": "string", "description": "Destination file path for the output MP4."}
             },
             "required": ["prompt"]
+        }
+    },
+    {
+        "name": "list_templates",
+        "description": "Lists all available video genre templates with their scene defaults, mood music, and color grade presets.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
         }
     },
     {
@@ -191,17 +207,34 @@ class MCPServer:
             res = AIVideoEngine.extend_video(prev_v, prompt, out_p, duration=dur, is_shorts=is_sh)
             return {"status": "ok", "out_path": str(res)}
 
+        elif tool_name == "list_templates":
+            return VIDEO_TEMPLATES
+
         elif tool_name == "create_video":
             import subprocess
             prompt = args["prompt"]
             out_p = Path(args.get("output_path", "/tmp/mcp_generated_video.mp4")).resolve()
             cmd = [sys.executable, "-m", "iram_video.cli", "-o", str(out_p)]
+            if args.get("template"):
+                cmd.extend(["--template", args["template"]])
+            if args.get("aspect_ratio"):
+                cmd.extend(["--aspect-ratio", args["aspect_ratio"]])
             if args.get("is_shorts"):
                 cmd.append("--shorts")
             if args.get("is_real", True):
                 cmd.append("--real")
+            if args.get("is_4k"):
+                cmd.append("--4k")
+            if args.get("transition"):
+                cmd.extend(["--transition", args["transition"]])
+            if args.get("color_grade"):
+                cmd.extend(["--grade", args["color_grade"]])
             if args.get("music"):
                 cmd.extend(["--music", args["music"]])
+            if args.get("bg_music"):
+                cmd.extend(["--bg-music", args["bg_music"]])
+            if "music_volume" in args:
+                cmd.extend(["--music-volume", str(args["music_volume"])])
             if args.get("steady_camera", True):
                 cmd.append("--steady")
             cmd.extend(["--", prompt])

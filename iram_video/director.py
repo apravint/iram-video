@@ -41,6 +41,9 @@ Also provide:
   - "secondary": [r, g, b] (secondary neutral/amber, e.g. [148, 163, 184] or [245, 158, 11])
   - "card_bg": [r, g, b] (slate card surface, e.g. [30, 41, 59])
 - "visual_policy": STRICT REQUIREMENT - AVOID all cyberpunk tropes, neon pink, magenta, or glowing green. Maintain clean, modern, professional enterprise aesthetics (Vox/Apple Keynote style).
+- "soundscape":
+  - "ambient_track": Suggested subtle ambient background (e.g. "mechanical_typing", "server_room", "subtle_rain", "subtle_wind", "room_tone")
+  - "soundscape_playlist": Array of 1 to 3 audio texture layers, e.g. [{"type": "mechanical_typing", "volume": 0.12}]
 - "youtube_metadata":
   - "description": A complete, ready-to-paste YouTube description with chapter placeholders
   - "tags": Array of 8-15 relevant YouTube tags
@@ -58,6 +61,8 @@ FALLBACK_MODELS = [
     "gemini-3.1-pro-preview"
 ]
 
+from .templates import get_template
+
 class Director:
     def __init__(self, api_key: str = None, model: str = None):
         self.model = model
@@ -66,7 +71,18 @@ class Director:
         else:
             self.client = genai.Client()
 
-    def direct(self, prompt: str, scene_count: int = None, style_hint: str = None, language: str = "en", is_shorts: bool = False, is_cinema: bool = False, is_real: bool = False, character: str = None) -> Dict[str, Any]:
+    def direct(
+        self,
+        prompt: str,
+        scene_count: int = None,
+        style_hint: str = None,
+        language: str = "en",
+        is_shorts: bool = False,
+        is_cinema: bool = False,
+        is_real: bool = False,
+        character: str = None,
+        template: str = None
+    ) -> Dict[str, Any]:
         """Queries Google Gemini to outline and write the screenplay with multi-model fallback."""
         user_msg = f"User Prompt / Video Topic: {prompt}\n"
         user_msg += (
@@ -74,7 +90,15 @@ class Director:
             "- AVOID all cyberpunk tropes, neon pink, magenta, glowing acid green, or hacker stereotypes.\n"
             "- Use clean, modern, professional editorial styling (deep slate, crisp white typography, subtle cobalt/warm amber accents).\n"
             "- Camera motion must be subtle and steady (e.g. 'steady', 'zoom_in', 'zoom_out'). NO violent whipping or chaotic motion.\n"
+            "- For each scene, include a 'lower_third' object: {\"title\": \"Punchy Subject/Name\", \"subtitle\": \"Role/Context\"}.\n"
         )
+
+        if template:
+            tmpl_data = get_template(template)
+            user_msg += f"\nDIRECTORIAL TEMPLATE: {tmpl_data['name'].upper()}\n"
+            user_msg += f"{tmpl_data['director_directive']}\n"
+            if not scene_count:
+                scene_count = tmpl_data.get("default_scenes", 4)
         
         if is_real:
             user_msg += (

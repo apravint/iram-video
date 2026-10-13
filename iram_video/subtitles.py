@@ -52,6 +52,9 @@ class KineticSubtitleGenerator:
         else:
             accent_color = "\\c&H0000D7FF&" if is_shorts else "\\c&H00FFFFFF&"
 
+        lt_size = 26 if is_shorts else 28
+        lt_margin_v = 360 if is_shorts else 90
+
         header = f"""[Script Info]
 Title: IRAM Kinetic Subtitles
 ScriptType: v4.00+
@@ -63,6 +66,7 @@ PlayResY: {res_y}
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,{font_name},{font_size},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,3,2,60,60,{margin_v},1
+Style: LowerThird,{font_name},{lt_size},&H00FFFFFF,&H0000FFFF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,3,2,1,70,70,{lt_margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -76,6 +80,20 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             scene_start = timeline_cursor
             scene_end = scene_start + duration
             timeline_cursor = scene_end
+
+            # Emit clean lower-third chyron for the first 3.5 seconds of the scene
+            heading = str(scene.get("heading") or "").strip()
+            subheading = str(scene.get("subheading") or "").strip()
+            lt_meta = scene.get("lower_third")
+            if isinstance(lt_meta, dict):
+                heading = lt_meta.get("title", heading)
+                subheading = lt_meta.get("subtitle", subheading)
+
+            if heading and duration >= 2.0:
+                chyron_end = min(scene_end, scene_start + 3.2)
+                sub_part = f"\\N{{\\c&H00D0E0F0&\\fs{int(lt_size*0.75)}}}  {subheading}" if subheading else ""
+                chyron_text = f"{{\\fad(250,250)\\c&H00F6823B&}}● {heading.upper()}{sub_part}"
+                events.append(f"Dialogue: 1,{format_ass_time(scene_start)},{format_ass_time(chyron_end)},LowerThird,,0,0,0,,{chyron_text}")
 
             if not text:
                 continue

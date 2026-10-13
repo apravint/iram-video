@@ -659,30 +659,22 @@ class MediaFetcher:
         draw.ellipse([(card_x + 44, card_y + 20), (card_x + 56, card_y + 32)], fill=(245, 158, 11))
         draw.ellipse([(card_x + 64, card_y + 20), (card_x + 76, card_y + 32)], fill=(34, 197, 94))
 
-        # Window title bar
-        win_title = "EnterpriseApplication.java" if any(k in headline.lower() for k in ["java", "spring", "code", "virtual", "thread"]) else "SystemArchitecture.yaml"
-        draw_mixed_line(draw, card_x + 90, card_y + 16, win_title, (148, 163, 184), fta_sm, fen_sm)
-        draw.line([(card_x, card_y + 48), (card_x + card_w, card_y + 48)], fill=(30, 41, 59), width=1)
-
-        # 5. Content inside card
+        # Window title bar & content detection
         content_y = card_y + 70
-        is_code_topic = any(k in headline.lower() for k in ["java", "spring", "code", "thread", "virtual", "compile", "rest", "api", "loom", "graalvm"])
+        from .motion_canvas import detect_code_language, MotionCanvas
+        is_code_topic = any(k in headline.lower() for k in [
+            "java", "spring", "code", "thread", "virtual", "compile", "rest", "api", "loom", "graalvm",
+            "python", "rust", "golang", "typescript", "javascript", "sql", "bash", "linux", "c++"
+        ])
 
         if is_code_topic:
+            detected_lang, detected_fname = detect_code_language(headline, title)
+            win_title = detected_fname
+            _, code_lines, status_msg, _ = MotionCanvas.get_code_snippet_for_language(detected_lang, headline)
+            draw_mixed_line(draw, card_x + 90, card_y + 16, win_title, (148, 163, 184), fta_sm, fen_sm)
+            draw.line([(card_x, card_y + 48), (card_x + card_w, card_y + 48)], fill=(30, 41, 59), width=1)
+
             # Render syntax-highlighted code block with line numbers
-            code_lines = [
-                ("@SpringBootApplication", (168, 85, 247)),
-                ("public class EnterpriseService {", (248, 250, 252)),
-                ("    @Bean", (168, 85, 247)),
-                ("    public TomcatProtocolHandlerCustomizer<?> protocolHandler() {", (56, 189, 248)),
-                ("        return protocol -> protocol.setExecutor(Executors.newVirtualThreadPerTaskExecutor());", (148, 163, 184)),
-                ("    }", (248, 250, 252)),
-                ("    @GetMapping(\"/api/v1/throughput\")", (168, 85, 247)),
-                ("    public ResponseEntity<Metrics> getMetrics() {", (56, 189, 248)),
-                ("        return ResponseEntity.ok(Metrics.highPerformanceScale());", (148, 163, 184)),
-                ("    }", (248, 250, 252)),
-                ("}", (248, 250, 252)),
-            ]
             for idx, (c_txt, c_col) in enumerate(code_lines):
                 if content_y + 34 > card_y + card_h - 30:
                     break
@@ -690,10 +682,14 @@ class MediaFetcher:
                 draw_mixed_line(draw, card_x + 75, content_y, c_txt, c_col, fta_code, fen_code)
                 content_y += 34
         else:
+            win_title = "ExecutiveOverview.yaml"
+            draw_mixed_line(draw, card_x + 90, card_y + 16, win_title, (148, 163, 184), fta_sm, fen_sm)
+            draw.line([(card_x, card_y + 48), (card_x + card_w, card_y + 48)], fill=(30, 41, 59), width=1)
+
             pillars = [
-                ("⚡ High-Throughput Processing", "Massive concurrency with low memory overhead per active connection.", (56, 189, 248)),
-                ("🛡️ Cloud-Native Resilience", "Automated circuit breakers, zero-downtime scaling, and containerized health checks.", (34, 197, 94)),
-                ("🚀 Production-Ready Observability", "Distributed tracing, unified metrics, and enterprise-grade telemetry out of the box.", (245, 158, 11)),
+                (f"⚡ Core Breakthrough: {headline[:35]}", "Transformative performance and structural efficiency across the domain.", (56, 189, 248)),
+                ("🛡️ Enterprise Resilience & Scale", "Engineered for robust reliability, verified metrics, and zero downtime.", (34, 197, 94)),
+                ("🚀 Strategic Impact & Next-Gen Velocity", "Accelerating workflows and delivering tangible outcomes at scale.", (245, 158, 11)),
             ]
             for p_title, p_desc, p_color in pillars:
                 if content_y + 70 > card_y + card_h - 20:
@@ -704,7 +700,7 @@ class MediaFetcher:
                 content_y += 85
 
         # 6. Bottom footer tag
-        footer_text = "IRAM FILM STUDIO • HIGH PERFORMANCE ENTERPRISE COMPUTING"
+        footer_text = "IRAM FILM STUDIO • UNIVERSAL HIGH-QUALITY PRODUCTION"
         draw_mixed_line(draw, 80, h - 45, footer_text, (100, 116, 139), fta_sm, fen_sm)
 
         img.convert("RGB").save(out_path, quality=95)

@@ -134,10 +134,18 @@ def wrap_text(text: str, font_ta, font_en, max_width: int, draw: ImageDraw.Draw)
     return lines
 
 class SlideRenderer:
-    def __init__(self, theme: Dict[str, Any] = None, is_shorts: bool = False):
-        self.is_shorts = is_shorts
-        self.width = 1080 if is_shorts else 1920
-        self.height = 1920 if is_shorts else 1080
+    def __init__(self, theme: Dict[str, Any] = None, is_shorts: bool = False, aspect_ratio: str = "16:9", is_4k: bool = False):
+        self.is_shorts = is_shorts or (aspect_ratio == "9:16")
+        self.aspect_ratio = aspect_ratio
+        self.is_4k = is_4k
+        if aspect_ratio == "1:1":
+            self.width, self.height = (2160, 2160) if is_4k else (1080, 1080)
+        elif self.is_shorts:
+            self.width, self.height = (2160, 3840) if is_4k else (1080, 1920)
+        elif aspect_ratio == "2.39:1":
+            self.width, self.height = (3840, 1608) if is_4k else (2560, 1072)
+        else:
+            self.width, self.height = (3840, 2160) if is_4k else (1920, 1080)
 
         theme = theme or {}
         self.bg_color = tuple(theme.get("bg", [15, 23, 42])) + (255,)
