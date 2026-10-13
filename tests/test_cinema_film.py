@@ -299,7 +299,7 @@ class TestCinemaFilmEngine(unittest.TestCase):
         import subprocess
         vf = (
             "drawbox=x=0:y=1906:w=iw:h=14:color=black@0.45:t=fill,"
-            "drawbox=x=0:y=1906:w='min(iw,iw*(t/5.0))':h=14:color=0x00E5FF@0.95:t=fill"
+            "drawbox=x=0:y=1906:w='min(iw,iw*(t/5.0))':h=14:color=white@0.85:t=fill"
         )
         cmd = [
             "ffmpeg", "-y",

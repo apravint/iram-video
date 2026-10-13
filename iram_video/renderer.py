@@ -279,9 +279,9 @@ class SlideRenderer:
             draw.line([(60, term_y + 44), (60 + card_w, term_y + 44)], fill=(51, 65, 85), width=1)
 
             # Window controls
-            draw.ellipse([(80, term_y + 14), (96, term_y + 30)], fill=(239, 68, 68))
-            draw.ellipse([(108, term_y + 14), (124, term_y + 30)], fill=(234, 179, 8))
-            draw.ellipse([(136, term_y + 14), (152, term_y + 30)], fill=(34, 197, 94))
+            draw.ellipse([(80, term_y + 14), (96, term_y + 30)], fill=(100, 116, 139))
+            draw.ellipse([(108, term_y + 14), (124, term_y + 30)], fill=(148, 163, 184))
+            draw.ellipse([(136, term_y + 14), (152, term_y + 30)], fill=(203, 213, 225))
 
             fta_tt, fen_tt = get_fonts(15, bold=True)
             draw_mixed_line(draw, 170, term_y + 12, "termux ~ bash (Android Linux)", (148, 163, 184), fta_tt, fen_tt)

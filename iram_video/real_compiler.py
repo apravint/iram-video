@@ -105,7 +105,7 @@ class RealVideoCompiler:
         if is_video:
             fc = (
                 f"[0:v]scale={self.w}:{self.h}:force_original_aspect_ratio=increase,"
-                f"crop={self.w}:{self.h},fps=30,format=yuv420p[v]"
+                f"crop={self.w}:{self.h},fps=30,setsar=1,format=yuv420p[v]"
             )
             cmd = [
                 "ffmpeg", "-y",
@@ -133,15 +133,16 @@ class RealVideoCompiler:
 
             d_frames = int(duration * 30) + 30
             if self.steady_camera:
-                sw, sh = (int(self.w * 1.04), int(self.h * 1.04))
+                sw, sh = ((int(self.w * 1.04) // 2) * 2, (int(self.h * 1.04) // 2) * 2)
                 zp = f"zoompan=z='1.0+0.02*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
             else:
-                sw, sh = (int(self.w * 1.15), int(self.h * 1.15))
+                sw, sh = ((int(self.w * 1.15) // 2) * 2, (int(self.h * 1.15) // 2) * 2)
                 zp = f"zoompan=z='1.0+0.05*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
             fc = (
                 f"[0:v]scale={sw}:{sh}:force_original_aspect_ratio=increase,"
                 f"crop={sw}:{sh},"
                 f"{zp},"
+                f"scale={self.w}:{self.h},setsar=1,"
                 f"fade=t=in:st=0:d=0.35,fade=t=out:st={max(0.1, duration - 0.35):.2f}:d=0.35,"
                 f"format=yuv420p[v]"
             )
@@ -211,12 +212,20 @@ class RealVideoCompiler:
                 )
                 is_video = media_path.suffix.lower() in [".webm", ".mp4", ".mkv", ".mov"]
                 if is_video:
-                    fc = f"[0:v]scale={self.w}:{self.h}:force_original_aspect_ratio=increase,crop={self.w}:{self.h},fps=30,format=yuv420p[v]"
+                    fc = f"[0:v]scale={self.w}:{self.h}:force_original_aspect_ratio=increase,crop={self.w}:{self.h},fps=30,setsar=1,format=yuv420p[v]"
                     cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(media_path), "-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS, "-t", f"{b_dur:.3f}", "-an", str(beat_clip_path)]
                 else:
                     d_frames = int(b_dur * 30) + 15
+                    sw, sh = ((int(self.w * 1.04) // 2) * 2, (int(self.h * 1.04) // 2) * 2)
                     zp = f"zoompan=z='1.0+0.02*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                    fc = f"[0:v]scale={int(self.w*1.04)}:{int(self.h*1.04)}:force_original_aspect_ratio=increase,crop={int(self.w*1.04)}:{int(self.h*1.04)},{zp},fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.1, b_dur-0.25):.2f}:d=0.25,format=yuv420p[v]"
+                    fc = (
+                        f"[0:v]scale={sw}:{sh}:force_original_aspect_ratio=increase,"
+                        f"crop={sw}:{sh},"
+                        f"{zp},"
+                        f"scale={self.w}:{self.h},setsar=1,"
+                        f"fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.1, b_dur-0.25):.2f}:d=0.25,"
+                        f"format=yuv420p[v]"
+                    )
                     cmd = ["ffmpeg", "-y", "-loop", "1", "-i", str(media_path), "-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS, "-t", f"{b_dur:.3f}", "-an", str(beat_clip_path)]
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 beat_clips.append(beat_clip_path)
@@ -300,9 +309,9 @@ class RealVideoCompiler:
             v_filters.append(cg_filter)
 
         if self.is_shorts and total_duration > 0:
-            # 1. Shorts retention progress bar (14px track + glowing cyan fill along bottom)
+            # 1. Shorts retention progress bar (14px track + clean neutral white fill along bottom)
             v_filters.append("drawbox=x=0:y=1906:w=iw:h=14:color=black@0.45:t=fill")
-            v_filters.append(f"drawbox=x=0:y=1906:w='min(iw,iw*(t/{max(0.1, total_duration):.2f}))':h=14:color=0x00E5FF@0.95:t=fill")
+            v_filters.append(f"drawbox=x=0:y=1906:w='min(iw,iw*(t/{max(0.1, total_duration):.2f}))':h=14:color=white@0.85:t=fill")
 
         if burn_subtitles:
             ass_path = self.work_dir / "real_subtitles.ass"
@@ -321,11 +330,11 @@ class RealVideoCompiler:
         maps = []
 
         if v_filters:
-            filter_complex_list.append(f"[0:v]{','.join(v_filters)},format=yuv420p[vout]")
+            filter_complex_list.append(f"[0:v]{','.join(v_filters)},setsar=1,format=yuv420p[vout]")
             maps.extend(["-map", "[vout]"])
             video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
         else:
-            filter_complex_list.append("[0:v]format=yuv420p[vout]")
+            filter_complex_list.append("[0:v]setsar=1,format=yuv420p[vout]")
             maps.extend(["-map", "[vout]"])
             video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
         if soundscape_playlist and total_duration > 0:

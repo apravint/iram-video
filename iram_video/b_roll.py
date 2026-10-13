@@ -1053,10 +1053,10 @@ class MediaFetcher:
             width=2
         )
 
-        # Window controls (macOS style dots)
-        draw.ellipse([(card_x + 24, card_y + 20), (card_x + 36, card_y + 32)], fill=(239, 68, 68))
-        draw.ellipse([(card_x + 44, card_y + 20), (card_x + 56, card_y + 32)], fill=(245, 158, 11))
-        draw.ellipse([(card_x + 64, card_y + 20), (card_x + 76, card_y + 32)], fill=(34, 197, 94))
+        # Window controls
+        draw.ellipse([(card_x + 24, card_y + 20), (card_x + 36, card_y + 32)], fill=(100, 116, 139))
+        draw.ellipse([(card_x + 44, card_y + 20), (card_x + 56, card_y + 32)], fill=(148, 163, 184))
+        draw.ellipse([(card_x + 64, card_y + 20), (card_x + 76, card_y + 32)], fill=(203, 213, 225))
 
         # Window title bar & content detection
         content_y = card_y + 70
@@ -1083,13 +1083,13 @@ class MediaFetcher:
             if is_mindset:
                 pillars = [
                     (f"⚡ Core Principle: {headline[:30]}", "Small daily commitments compound into massive lifelong results.", (56, 189, 248)),
-                    ("🛡️ Relentless Execution", "Show up and do the work regardless of emotional hesitation.", (34, 197, 94)),
+                    ("🛡️ Relentless Execution", "Show up and do the work regardless of emotional hesitation.", (212, 175, 55)),
                     ("🚀 Action Drives Momentum", "Action produces emotion, not the reverse. Move first.", (245, 158, 11)),
                 ]
             else:
                 pillars = [
                     (f"⚡ Core Breakthrough: {headline[:32]}", "Transformative structural efficiency across the domain.", (56, 189, 248)),
-                    ("🛡️ Enterprise Resilience & Scale", "Engineered for robust reliability, verified metrics, zero downtime.", (34, 197, 94)),
+                    ("🛡️ Enterprise Resilience & Scale", "Engineered for robust reliability, verified metrics, zero downtime.", (212, 175, 55)),
                     ("🚀 Strategic Next-Gen Impact", "Accelerating workflows and delivering tangible outcomes at scale.", (245, 158, 11)),
                 ]
 

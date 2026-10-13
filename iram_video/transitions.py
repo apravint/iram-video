@@ -65,7 +65,7 @@ class TransitionEngine:
             raise ValueError("No video clips provided to transition engine.")
 
         if len(clip_paths) == 1:
-            cmd = ["ffmpeg", "-y", "-i", str(clip_paths[0]), "-c", "copy", str(output_path)]
+            cmd = ["ffmpeg", "-y", "-i", str(clip_paths[0]), "-vf", "setsar=1", "-c:v", "libx264", "-preset", "veryfast", "-c:a", "copy", str(output_path)]
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return output_path
 
@@ -103,7 +103,7 @@ class TransitionEngine:
                 out_a = f"a_xf_{i}"
                 is_last = (i == len(clip_paths) - 1)
 
-                tag_v = f"[{out_v}]" if not is_last else "[v_master]"
+                tag_v = f"[{out_v}]"
                 tag_a = f"[{out_a}]" if not is_last else "[a_master]"
 
                 v_filters.append(
@@ -117,6 +117,7 @@ class TransitionEngine:
                 prev_a = out_a
                 curr_offset = curr_offset + durations[i] - trans_duration
 
+            v_filters.append(f"[{prev_v}]setsar=1[v_master]")
             full_filter = ";".join(v_filters + a_filters)
 
             cmd = [

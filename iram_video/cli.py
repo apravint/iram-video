@@ -493,7 +493,7 @@ def main():
 
             chosen_palette = args.subtitle_palette
             if not chosen_palette or chosen_palette.lower() == "auto":
-                chosen_palette = random.choice(["gold", "hormozi", "neon-cyan", "fire-red", "white"])
+                chosen_palette = random.choice(["gold", "white", "hormozi"])
 
             sub_status = f"with subtitles [{chosen_palette}]" if burn_subtitles else "no subtitles"
             print(f"⚙️  [5/5] Compiling master documentary video with acoustic score ({sub_status}, transition={transition}, grade={color_grade})...")

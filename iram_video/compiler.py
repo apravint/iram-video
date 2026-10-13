@@ -188,9 +188,9 @@ class VideoCompiler:
             v_filters.append(cg_filter)
 
         if self.is_shorts:
-            # 1. Shorts retention progress bar (14px track + glowing cyan fill along bottom)
+            # 1. Shorts retention progress bar (14px track + clean neutral white fill along bottom)
             v_filters.append("drawbox=x=0:y=1906:w=iw:h=14:color=black@0.45:t=fill")
-            v_filters.append(f"drawbox=x=0:y=1906:w='min(iw,iw*(t/{max(0.1, total_duration):.2f}))':h=14:color=0x00E5FF@0.95:t=fill")
+            v_filters.append(f"drawbox=x=0:y=1906:w='min(iw,iw*(t/{max(0.1, total_duration):.2f}))':h=14:color=white@0.85:t=fill")
 
         if burn_subtitles:
             ass_path = self.work_dir / "kinetic_subtitles.ass"
@@ -210,11 +210,11 @@ class VideoCompiler:
         maps = []
 
         if v_filters:
-            filter_complex_list.append(f"[0:v]{','.join(v_filters)},format=yuv420p[vout]")
+            filter_complex_list.append(f"[0:v]{','.join(v_filters)},setsar=1,format=yuv420p[vout]")
             maps.extend(["-map", "[vout]"])
             video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
         else:
-            filter_complex_list.append("[0:v]format=yuv420p[vout]")
+            filter_complex_list.append("[0:v]setsar=1,format=yuv420p[vout]")
             maps.extend(["-map", "[vout]"])
             video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
 

@@ -259,10 +259,16 @@ class MotionCanvas:
             "-pix_fmt", "rgb24",
             "-r", str(fps),
             "-i", "-",
+            "-vf", "setsar=1",
             "-c:v", "libx264",
             "-preset", "veryfast",
             "-crf", "18",
             "-pix_fmt", "yuv420p",
+            "-colorspace", "bt709",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
+            "-color_range", "tv",
+            "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709",
             str(out_path)
         ]
         return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -798,10 +804,10 @@ class MotionCanvas:
                     width=2
                 )
 
-                # macOS window dots
-                draw.ellipse([(card_x1 + 24, card_y1 + 18), (card_x1 + 36, card_y1 + 30)], fill=(239, 68, 68))
-                draw.ellipse([(card_x1 + 44, card_y1 + 18), (card_x1 + 56, card_y1 + 30)], fill=(245, 158, 11))
-                draw.ellipse([(card_x1 + 64, card_y1 + 18), (card_x1 + 76, card_y1 + 30)], fill=(34, 197, 94))
+                # Window dots
+                draw.ellipse([(card_x1 + 24, card_y1 + 18), (card_x1 + 36, card_y1 + 30)], fill=(100, 116, 139))
+                draw.ellipse([(card_x1 + 44, card_y1 + 18), (card_x1 + 56, card_y1 + 30)], fill=(148, 163, 184))
+                draw.ellipse([(card_x1 + 64, card_y1 + 18), (card_x1 + 76, card_y1 + 30)], fill=(203, 213, 225))
                 draw_mixed_line(draw, card_x1 + 90, card_y1 + 14, win_title, c_gray, fta_sm, fen_sm)
                 draw.line([(card_x1, card_y1 + 44), (card_x2, card_y1 + 44)], fill=(30, 41, 59), width=1)
 
