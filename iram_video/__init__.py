@@ -14,6 +14,7 @@ from .subtitles import (
 from .voice import VoiceSynthesizer
 from .soundscape_mixer import SoundscapeMixer
 from .autocut import detect_scenes, smart_assemble
+from .exploded_engine import ExplodedCADVideoEngine, PIXEL_TENSOR_HARDWARE_PRESET
 
 __version__ = "2.1.0"
 
@@ -28,4 +29,6 @@ __all__ = [
     "SoundscapeMixer",
     "detect_scenes",
     "smart_assemble",
+    "ExplodedCADVideoEngine",
+    "PIXEL_TENSOR_HARDWARE_PRESET",
 ]
