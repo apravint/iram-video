@@ -68,7 +68,7 @@ class RealVideoCompiler:
         beat_type = beat.get("beat_type", "real_media")
         query = beat.get("query") or beat.get("phrase") or self.global_topic or "documentary landscape"
 
-        if beat_type in ("metric_card", "route_map", "code_card", "listicle_card", "step_card", "comparison_card"):
+        if not self.is_shorts and beat_type in ("metric_card", "route_map", "code_card", "listicle_card", "step_card", "comparison_card"):
             tmp_video = self.shots_dir / f"tmp_single_{scene_idx:02d}.mp4"
             if beat_type == "metric_card":
                 MotionCanvas.render_metric_card(beat, tmp_video, duration=duration, is_shorts=self.is_shorts)
@@ -182,30 +182,31 @@ class RealVideoCompiler:
                 b_dur = float(beat["duration"])
                 beat_clip_path = self.shots_dir / f"beat_{scene_idx:02d}_{b_idx:02d}.mp4"
                 beat_type = beat.get("beat_type", "real_media")
-                if beat_type == "metric_card":
-                    MotionCanvas.render_metric_card(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
-                    beat_clips.append(beat_clip_path)
-                    continue
-                if beat_type == "route_map":
-                    MotionCanvas.render_route_map(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
-                    beat_clips.append(beat_clip_path)
-                    continue
-                if beat_type == "code_card":
-                    MotionCanvas.render_code_card(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
-                    beat_clips.append(beat_clip_path)
-                    continue
-                if beat_type == "listicle_card":
-                    MotionCanvas.render_listicle_card(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
-                    beat_clips.append(beat_clip_path)
-                    continue
-                if beat_type == "step_card":
-                    MotionCanvas.render_step_card(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
-                    beat_clips.append(beat_clip_path)
-                    continue
-                if beat_type == "comparison_card":
-                    MotionCanvas.render_comparison_card(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
-                    beat_clips.append(beat_clip_path)
-                    continue
+                if not self.is_shorts:
+                    if beat_type == "metric_card":
+                        MotionCanvas.render_metric_card(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
+                        beat_clips.append(beat_clip_path)
+                        continue
+                    if beat_type == "route_map":
+                        MotionCanvas.render_route_map(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
+                        beat_clips.append(beat_clip_path)
+                        continue
+                    if beat_type == "code_card":
+                        MotionCanvas.render_code_card(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
+                        beat_clips.append(beat_clip_path)
+                        continue
+                    if beat_type == "listicle_card":
+                        MotionCanvas.render_listicle_card(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
+                        beat_clips.append(beat_clip_path)
+                        continue
+                    if beat_type == "step_card":
+                        MotionCanvas.render_step_card(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
+                        beat_clips.append(beat_clip_path)
+                        continue
+                    if beat_type == "comparison_card":
+                        MotionCanvas.render_comparison_card(beat, beat_clip_path, duration=b_dur, is_shorts=self.is_shorts)
+                        beat_clips.append(beat_clip_path)
+                        continue
 
                 media_path = AIVideoEngine.fetch_or_generate_beat_media(
                     beat, self.broll_dir, f"{scene_idx:02d}_{b_idx:02d}", is_shorts=self.is_shorts, provider=self.provider, global_topic=self.global_topic

@@ -466,6 +466,17 @@ class MediaFetcher:
                     })
         except Exception as e:
             pass
+
+        # Salient noun query relaxation for zero-result descriptive queries
+        if not results and len(query.split()) > 2:
+            stop_words = {"the", "a", "an", "in", "on", "at", "of", "and", "or", "for", "with", "out", "by", "from", "to", "up", "into"}
+            content_words = [w for w in re.findall(r'\b[a-zA-Z]{3,}\b', query.lower()) if w not in stop_words]
+            if len(content_words) >= 2:
+                relaxed_q = f"{content_words[-2]} {content_words[-1]}"
+                return cls.search_coverr(relaxed_q, count=count, global_topic=global_topic, is_shorts=is_shorts)
+            elif len(content_words) == 1:
+                return cls.search_coverr(content_words[0], count=count, global_topic=global_topic, is_shorts=is_shorts)
+
         return results
 
     @classmethod
@@ -983,7 +994,45 @@ class MediaFetcher:
                     else:
                         target.unlink(missing_ok=True)
 
-        # 4. Clean documentary frame fallback
+        # 4. Universal High-Quality Stock Video Fallback (Coverr / Pexels / Pixabay)
+        # Guarantees continuous authentic real video footage instead of static slide cards
+        stop_words = {"the", "a", "an", "in", "on", "at", "of", "and", "or", "for", "with", "out", "by", "from", "to", "up", "into", "how", "what", "why"}
+        topic_words = [w for w in re.findall(r'\b[a-zA-Z]{3,}\b', (global_topic or clean_q).lower()) if w not in stop_words]
+
+        cinematic_fallbacks = [
+            "cinematic", "action", "focus", "nature", "city", "ocean waves", "dramatic lighting", "mountain sunrise", "running", "person"
+        ]
+        fallback_queries = []
+        if len(topic_words) >= 2:
+            fallback_queries.append(f"{topic_words[0]} {topic_words[1]}")
+        if topic_words:
+            fallback_queries.append(topic_words[0])
+
+        h = abs(hash(f"{query}_{beat_id}"))
+        fallback_queries.append(cinematic_fallbacks[h % len(cinematic_fallbacks)])
+        fallback_queries.append(cinematic_fallbacks[(h + 3) % len(cinematic_fallbacks)])
+
+        for fq in fallback_queries:
+            fb_results = cls.search_coverr(fq, count=6, global_topic=global_topic, is_shorts=is_shorts)
+            fb_candidates = [
+                item for item in fb_results
+                if not _is_url_already_used(item.get("url", ""))
+            ]
+            random.shuffle(fb_candidates)
+            for item in fb_candidates:
+                ext = ".webm" if item["type"] == "video" else ".jpg"
+                target = out_dir / f"beat_{beat_id}{ext}"
+                if target.exists() and cls.verify_media_file(target, is_shorts=is_shorts):
+                    cls._mark_url_used(item["url"])
+                    return target
+                if cls.download_file(item["url"], target):
+                    if cls.verify_media_file(target, is_shorts=is_shorts):
+                        cls._mark_url_used(item["url"])
+                        return target
+                    else:
+                        target.unlink(missing_ok=True)
+
+        # 5. Clean documentary frame fallback (offline emergency fallback)
         fallback_img = out_dir / f"beat_{beat_id}.jpg"
         if not fallback_img.exists() or not cls.verify_media_file(fallback_img, is_shorts=is_shorts):
             cls.create_clean_documentary_frame(query, fallback_img, beat_data=beat_data, is_shorts=is_shorts)
@@ -1003,16 +1052,27 @@ class MediaFetcher:
         is_shorts: bool = False
     ):
         """
-        Renders a broadcast-quality editorial documentary slide with clean typography,
-        structured technical cards or code snippets, and modern enterprise palette (NO spirals/concentric ellipses).
+        Renders a broadcast-quality editorial documentary frame.
+        In Shorts mode, renders a clean cinematic atmospheric visual with ZERO cards or UI elements.
         """
         w, h = (1080, 1920) if is_shorts else (1920, 1080)
+        if is_shorts:
+            # Clean cinematic backdrop for vertical video without presentation cards or window buttons
+            img = Image.new("RGBA", (w, h), (11, 15, 25, 255))
+            draw = ImageDraw.Draw(img)
+            # Subtle radial vignette glow at center
+            for r in range(min(w, h) // 2, 0, -20):
+                alpha = int(25 * (1.0 - r / (min(w, h) // 2)))
+                draw.ellipse([(w // 2 - r, h // 2 - r), (w // 2 + r, h // 2 + r)], fill=(20, 32, 55, alpha))
+            img.convert("RGB").save(out_path, quality=95)
+            return
+
         img = Image.new("RGBA", (w, h), (15, 23, 42, 255))  # Deep Slate-900
         draw = ImageDraw.Draw(img)
 
         # 1. Subtle architectural background grid (clean, modern tech pattern)
         grid_color = (24, 34, 53, 160)
-        grid_step = 60 if is_shorts else 80
+        grid_step = 80
         for x in range(0, w, grid_step):
             draw.line([(x, 0), (x, h)], fill=grid_color, width=1)
         for y in range(0, h, grid_step):
@@ -1028,8 +1088,13 @@ class MediaFetcher:
         fta_sm, fen_sm = get_fonts(24 if is_shorts else 20, bold=False)
         fta_code, fen_code = get_fonts(24 if is_shorts else 22, bold=False)
 
-        # 2. Clean headline first (so topic detection and card rendering have the title)
-        headline = (title or "System Architecture").strip()
+        # 2. Clean narrative headline first (derived from story beat, NOT raw camera query)
+        narrative_title = ""
+        if beat_data and isinstance(beat_data, dict):
+            narrative_title = beat_data.get("heading") or beat_data.get("title") or beat_data.get("phrase") or beat_data.get("narration") or ""
+        if not narrative_title:
+            narrative_title = title or "Core Concept & Analysis"
+        headline = narrative_title.strip()
         headline = re.sub(r'[\r\n\t]+', ' ', headline)[:100]
 
         # 3. Category badge

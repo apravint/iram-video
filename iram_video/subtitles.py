@@ -219,7 +219,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 heading = lt_meta.get("title", heading)
                 subheading = lt_meta.get("subtitle", subheading)
 
-            if heading and duration >= 2.0:
+            if heading and duration >= 2.0 and not is_shorts:
                 chyron_end = min(scene_end, scene_start + 3.2)
                 sub_part = f"\\N{{\\c&H00D0E0F0&\\fs{int(lt_size*0.75)}}}  {subheading}" if subheading else ""
                 chyron_text = f"{{\\fad(250,250)\\c&H00F6823B&}}● {heading.upper()}{sub_part}"
