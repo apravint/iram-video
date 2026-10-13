@@ -129,6 +129,11 @@ class TransitionEngine:
                 "-preset", "veryfast",
                 "-crf", "18",
                 "-pix_fmt", "yuv420p",
+                "-colorspace", "bt709",
+                "-color_primaries", "bt709",
+                "-color_trc", "bt709",
+                "-color_range", "tv",
+                "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709",
                 "-c:a", "aac",
                 "-b:a", "192k",
                 str(output_path)

@@ -254,12 +254,7 @@ def main():
     # Color grading preset
     color_grade = args.grade
     if color_grade == "auto":
-        if is_cinema or is_film:
-            color_grade = "cinematic"
-        elif is_real:
-            color_grade = "documentary"
-        else:
-            color_grade = "clean"
+        color_grade = "clean"
 
     transition = args.transition
 

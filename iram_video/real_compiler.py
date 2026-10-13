@@ -13,6 +13,15 @@ from .color_grade import get_color_grade_filter
 from .state_machine import StateMachineAssetBuilder, AssetRenderState
 from .soundscape_mixer import SoundscapeMixer
 
+STANDARD_BT709_ARGS = [
+    "-pix_fmt", "yuv420p",
+    "-colorspace", "bt709",
+    "-color_primaries", "bt709",
+    "-color_trc", "bt709",
+    "-color_range", "tv",
+    "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709",
+]
+
 class RealVideoCompiler:
     """
     Compiles realistic documentary-style YouTube videos with AI video models (Veo/Wan/Kling),
@@ -96,7 +105,7 @@ class RealVideoCompiler:
         if is_video:
             fc = (
                 f"[0:v]scale={self.w}:{self.h}:force_original_aspect_ratio=increase,"
-                f"crop={self.w}:{self.h},fps=30[v]"
+                f"crop={self.w}:{self.h},fps=30,format=yuv420p[v]"
             )
             cmd = [
                 "ffmpeg", "-y",
@@ -107,7 +116,7 @@ class RealVideoCompiler:
                 "-map", "1:a",
                 "-c:v", "libx264", "-preset", "veryfast",
                 "-c:a", "aac", "-b:a", "192k",
-                "-pix_fmt", "yuv420p",
+                *STANDARD_BT709_ARGS,
                 "-t", f"{duration:.3f}",
                 str(out_shot)
             ]
@@ -133,7 +142,8 @@ class RealVideoCompiler:
                 f"[0:v]scale={sw}:{sh}:force_original_aspect_ratio=increase,"
                 f"crop={sw}:{sh},"
                 f"{zp},"
-                f"fade=t=in:st=0:d=0.35,fade=t=out:st={max(0.1, duration - 0.35):.2f}:d=0.35[v]"
+                f"fade=t=in:st=0:d=0.35,fade=t=out:st={max(0.1, duration - 0.35):.2f}:d=0.35,"
+                f"format=yuv420p[v]"
             )
             cmd = [
                 "ffmpeg", "-y",
@@ -144,7 +154,7 @@ class RealVideoCompiler:
                 "-map", "1:a",
                 "-c:v", "libx264", "-preset", "veryfast",
                 "-c:a", "aac", "-b:a", "192k",
-                "-pix_fmt", "yuv420p",
+                *STANDARD_BT709_ARGS,
                 "-t", f"{duration:.3f}",
                 str(out_shot)
             ]
@@ -201,13 +211,13 @@ class RealVideoCompiler:
                 )
                 is_video = media_path.suffix.lower() in [".webm", ".mp4", ".mkv", ".mov"]
                 if is_video:
-                    fc = f"[0:v]scale={self.w}:{self.h}:force_original_aspect_ratio=increase,crop={self.w}:{self.h},fps=30[v]"
-                    cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(media_path), "-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-t", f"{b_dur:.3f}", "-an", str(beat_clip_path)]
+                    fc = f"[0:v]scale={self.w}:{self.h}:force_original_aspect_ratio=increase,crop={self.w}:{self.h},fps=30,format=yuv420p[v]"
+                    cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(media_path), "-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS, "-t", f"{b_dur:.3f}", "-an", str(beat_clip_path)]
                 else:
                     d_frames = int(b_dur * 30) + 15
                     zp = f"zoompan=z='1.0+0.02*(3*pow(on/{d_frames},2)-2*pow(on/{d_frames},3))':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={self.w}x{self.h}:fps=30"
-                    fc = f"[0:v]scale={int(self.w*1.04)}:{int(self.h*1.04)}:force_original_aspect_ratio=increase,crop={int(self.w*1.04)}:{int(self.h*1.04)},{zp},fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.1, b_dur-0.25):.2f}:d=0.25[v]"
-                    cmd = ["ffmpeg", "-y", "-loop", "1", "-i", str(media_path), "-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-t", f"{b_dur:.3f}", "-an", str(beat_clip_path)]
+                    fc = f"[0:v]scale={int(self.w*1.04)}:{int(self.h*1.04)}:force_original_aspect_ratio=increase,crop={int(self.w*1.04)}:{int(self.h*1.04)},{zp},fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.1, b_dur-0.25):.2f}:d=0.25,format=yuv420p[v]"
+                    cmd = ["ffmpeg", "-y", "-loop", "1", "-i", str(media_path), "-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS, "-t", f"{b_dur:.3f}", "-an", str(beat_clip_path)]
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 beat_clips.append(beat_clip_path)
 
@@ -311,11 +321,13 @@ class RealVideoCompiler:
         maps = []
 
         if v_filters:
-            filter_complex_list.append(f"[0:v]{','.join(v_filters)}[vout]")
+            filter_complex_list.append(f"[0:v]{','.join(v_filters)},format=yuv420p[vout]")
             maps.extend(["-map", "[vout]"])
-            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p"]
+            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
         else:
-            maps.extend(["-map", "0:v"])
+            filter_complex_list.append("[0:v]format=yuv420p[vout]")
+            maps.extend(["-map", "[vout]"])
+            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
         if soundscape_playlist and total_duration > 0:
             layered_soundscape_wav = self.work_dir / "soundscape_mixed_bg.wav"
             primary_amb = soundscape_playlist[0].get("type", "room_tone") if soundscape_playlist else "room_tone"

@@ -13,33 +13,33 @@ COLOR_GRADE_PRESETS = {
         "ffmpeg_filter": "eq=contrast=1.02:brightness=0.0:saturation=1.02"
     },
     "documentary": {
-        "name": "Warm Documentary",
-        "description": "Natural earth tones, gentle warmth, and balanced documentary highlights.",
-        "ffmpeg_filter": "eq=contrast=1.03:brightness=0.01:saturation=1.03,colorbalance=rs=0.03:gs=0.01:bs=-0.02"
+        "name": "Documentary Natural",
+        "description": "Natural, true-to-life documentary visual fidelity with original balance.",
+        "ffmpeg_filter": "eq=contrast=1.02:brightness=0.0:saturation=1.02"
     },
     "cinematic": {
-        "name": "Hollywood Scope",
-        "description": "Subtle teal & orange color grading with cinematic dynamic range.",
-        "ffmpeg_filter": "colorbalance=rs=0.06:gs=-0.03:bs=-0.06:rm=-0.03:gm=0.0:bm=0.08:rh=-0.03:gh=0.03:bh=0.12,eq=contrast=1.04:saturation=1.04"
+        "name": "Subtle Cinematic Contrast",
+        "description": "Pure cinematic tone curve with neutral color balance and zero pink/green distortion.",
+        "ffmpeg_filter": "colorbalance=rs=0.0:gs=0.0:bs=0.0:rm=0.0:gm=0.0:bm=0.0:rh=0.0:gh=0.0:bh=0.0,eq=contrast=1.02:saturation=1.02"
     },
     "vintage": {
-        "name": "35mm Analog Film",
-        "description": "Nostalgic golden-era film tone with subtle organic texture.",
-        "ffmpeg_filter": "eq=contrast=0.98:brightness=0.02:saturation=0.92,colorbalance=rs=0.05:gs=0.02:bs=-0.04,noise=alls=8:allf=t+u"
+        "name": "35mm Analog Subtle",
+        "description": "Subtle analog film texture with natural colors.",
+        "ffmpeg_filter": "eq=contrast=0.98:saturation=0.96,noise=alls=4:allf=t+u"
     },
     "noir": {
         "name": "Dramatic Monochrome",
         "description": "High-contrast black & white with deep obsidian shadows and crisp highlights.",
-        "ffmpeg_filter": "hue=s=0,eq=contrast=1.12:brightness=-0.02"
+        "ffmpeg_filter": "hue=s=0,eq=contrast=1.10:brightness=-0.01"
     },
     "vibrant": {
         "name": "Vibrant Promo & Tech",
         "description": "High-impact punchy colors with heightened contrast for marketing and launch showcases.",
-        "ffmpeg_filter": "eq=contrast=1.06:brightness=0.01:saturation=1.14"
+        "ffmpeg_filter": "eq=contrast=1.04:saturation=1.08"
     },
     "none": {
-        "name": "Passthrough",
-        "description": "No color alteration.",
+        "name": "Passthrough (Original)",
+        "description": "No color alteration. 100% original camera colors.",
         "ffmpeg_filter": "null"
     }
 }

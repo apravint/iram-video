@@ -7,6 +7,15 @@ from .subtitles import KineticSubtitleGenerator
 from .transitions import TransitionEngine
 from .color_grade import get_color_grade_filter
 
+STANDARD_BT709_ARGS = [
+    "-pix_fmt", "yuv420p",
+    "-colorspace", "bt709",
+    "-color_primaries", "bt709",
+    "-color_trc", "bt709",
+    "-color_range", "tv",
+    "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709",
+]
+
 class VideoCompiler:
     def __init__(self, work_dir: Path, is_cinema: bool = False, is_shorts: bool = False, character: Optional[str] = None, aspect_ratio: str = "16:9", is_4k: bool = False):
         self.work_dir = work_dir
@@ -201,12 +210,13 @@ class VideoCompiler:
         maps = []
 
         if v_filters:
-            filter_complex_list.append(f"[0:v]{','.join(v_filters)}[vout]")
+            filter_complex_list.append(f"[0:v]{','.join(v_filters)},format=yuv420p[vout]")
             maps.extend(["-map", "[vout]"])
-            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p"]
+            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
         else:
-            maps.extend(["-map", "0:v"])
-            video_codec_args = ["-c:v", "copy"]
+            filter_complex_list.append("[0:v]format=yuv420p[vout]")
+            maps.extend(["-map", "[vout]"])
+            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
 
         if bg_music and bg_music.exists():
             filter_complex_list.append(
