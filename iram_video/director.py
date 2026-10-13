@@ -4,6 +4,7 @@ import re
 import time
 from typing import Dict, Any
 from google import genai
+from google.genai import types
 
 DIRECTOR_SYSTEM_PROMPT = """
 You are an expert AI Video Producer and Creative Director.
@@ -47,6 +48,12 @@ Also provide:
 - "youtube_metadata":
   - "description": A complete, ready-to-paste YouTube description with chapter placeholders
   - "tags": Array of 8-15 relevant YouTube tags
+
+CRITICAL UNIQUENESS & CREATIVITY MANDATE:
+- Every video screenplay MUST be completely fresh, unique, and tailored specifically to the prompt.
+- NEVER reuse clichéd tropes or formulaic openers like "Most people fail because...", "Motivation is a lie", or "The secret to becoming unstoppable".
+- Invent fresh narrative angles, unexpected hooks, relatable real-world analogies, and vivid emotional or thought-provoking moments.
+- For EVERY scene's 'broll_beats', provide highly specific, concrete, physical cinematography search queries ('search_query') describing real physical subjects, environments, actions, and lighting (e.g. "blacksmith sparks anvil", "marathon runner rain finish line", "deep sea diver bioluminescent reef"). NEVER output generic or repetitive phrases.
 
 CRITICAL: Return ONLY valid JSON with no markdown formatting or code blocks.
 """
@@ -155,9 +162,14 @@ class Director:
 
         for m in models_to_try:
             try:
+                cfg = types.GenerateContentConfig(
+                    temperature=0.88,
+                    top_p=0.95,
+                )
                 response = self.client.models.generate_content(
                     model=m,
-                    contents=[DIRECTOR_SYSTEM_PROMPT + "\n\n" + user_msg]
+                    contents=[DIRECTOR_SYSTEM_PROMPT + "\n\n" + user_msg],
+                    config=cfg
                 )
                 raw = response.text.strip()
                 if raw.startswith("```json"):

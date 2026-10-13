@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sys
+import random
 import tempfile
 from pathlib import Path
 
@@ -281,11 +282,11 @@ def main():
     music_mood = args.music
     if music_mood == "auto":
         if is_cinema or is_film:
-            music_mood = "trailer"
+            music_mood = random.choice(["trailer", "cinematic"])
         elif is_real:
-            music_mood = "documentary"
+            music_mood = random.choice(["documentary", "cinematic", "acoustic", "energetic", "minimal"])
         else:
-            music_mood = "tech"
+            music_mood = random.choice(["tech", "lofi", "ambient", "corporate"])
 
     res_badge = "4K UHD" if args.is_4k else "1080p HD"
     tmpl_badge = f" [{selected_template.upper()} TEMPLATE]" if selected_template else ""
@@ -425,8 +426,18 @@ def main():
 
         # 2. Voiceover Synthesis
         rate = "+3%" if is_shorts else ("-2%" if is_cinema else "+0%")
+        chosen_voice = args.voice
+        if not chosen_voice or chosen_voice.lower() == "auto":
+            if lang == "ta":
+                chosen_voice = random.choice(["pallavi", "valluvar"])
+            else:
+                if is_cinema or is_film:
+                    chosen_voice = random.choice(["christopher", "guy", "eric"])
+                else:
+                    chosen_voice = random.choice(["aria", "christopher", "jenny", "guy", "eric"])
+
         print(f"🎙️  [2/5] Synthesizing neural voiceover ({lang_display})...")
-        voice_synth = VoiceSynthesizer(voice_key=args.voice, language=lang, rate=rate)
+        voice_synth = VoiceSynthesizer(voice_key=chosen_voice, language=lang, rate=rate)
         scenes = voice_synth.synthesize(scenes, audio_dir)
         total_duration = sum(s["duration"] for s in scenes)
         print(f"✓ Voiceover complete using voice '{voice_synth.voice}': {total_duration:.1f}s total duration")
@@ -480,7 +491,11 @@ def main():
             if not soundscape_playlist and soundscape_info.get("ambient_track"):
                 soundscape_playlist = [{"type": soundscape_info.get("ambient_track"), "volume": 0.12}]
 
-            sub_status = f"with subtitles [{args.subtitle_palette}]" if burn_subtitles else "no subtitles"
+            chosen_palette = args.subtitle_palette
+            if not chosen_palette or chosen_palette.lower() == "auto":
+                chosen_palette = random.choice(["gold", "hormozi", "neon-cyan", "fire-red", "white"])
+
+            sub_status = f"with subtitles [{chosen_palette}]" if burn_subtitles else "no subtitles"
             print(f"⚙️  [5/5] Compiling master documentary video with acoustic score ({sub_status}, transition={transition}, grade={color_grade})...")
             real_compiler.compile_real_video(
                 scenes,
@@ -489,7 +504,7 @@ def main():
                 global_topic=combined_topic,
                 burn_subtitles=burn_subtitles,
                 language=lang,
-                palette_key=args.subtitle_palette,
+                palette_key=chosen_palette,
                 transition=transition,
                 color_grade=color_grade,
                 music_volume=args.music_volume,

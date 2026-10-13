@@ -2,6 +2,7 @@ import os
 import re
 import time
 import json
+import random
 import threading
 import urllib.request
 import urllib.parse
@@ -63,14 +64,47 @@ class MediaFetcher:
 
     _lock = threading.Lock()
     _used_urls: Set[str] = set()
+    _PERSISTENT_CACHE_FILE = Path.home() / ".cache" / "iram_video" / "used_media_registry.json"
+    _persistent_urls: Set[str] = set()
     _topic_media_pool: List[Dict[str, Any]] = []
     _cached_topic: str = ""
+
+    @classmethod
+    def _load_persistent_urls(cls) -> Set[str]:
+        try:
+            if cls._PERSISTENT_CACHE_FILE.exists():
+                with open(cls._PERSISTENT_CACHE_FILE, "r") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        return set(data)
+        except Exception:
+            pass
+        return set()
+
+    @classmethod
+    def _mark_url_used(cls, url: str):
+        if not url:
+            return
+        with cls._lock:
+            cls._used_urls.add(url)
+            cls._persistent_urls.add(url)
+            try:
+                cls._PERSISTENT_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                existing = cls._load_persistent_urls()
+                merged = list(existing | cls._persistent_urls)
+                if len(merged) > 5000:
+                    merged = merged[-5000:]
+                with open(cls._PERSISTENT_CACHE_FILE, "w") as f:
+                    json.dump(merged, f)
+            except Exception:
+                pass
 
     @classmethod
     def reset_session(cls):
         """Resets the session caches so each video compilation gets fresh variety without duplicate shots."""
         with cls._lock:
             cls._used_urls = set()
+            cls._persistent_urls = cls._load_persistent_urls()
             cls._topic_media_pool = []
             cls._cached_topic = ""
 
@@ -495,6 +529,8 @@ class MediaFetcher:
         if m:
             b_idx = int(m.group())
 
+        seed_offset = abs(hash(f"{topic}_{query}_{beat_id}")) + random.randint(0, 50)
+
         # 1. Mindset / Motivation / Discipline / Habit
         is_mindset = any(k in combined for k in [
             "discipline", "motivation", "unstoppable", "mindset", "habit",
@@ -504,33 +540,59 @@ class MediaFetcher:
         if is_mindset:
             if any(k in query.lower() for k in ["trap", "wait", "ready", "hesitat", "procrastin", "doubt", "comfort", "feel", "inspire", "stuck"]):
                 shots = [
-                    "alarm clock",
-                    "person rain window",
-                    "hourglass",
-                    "foggy road",
+                    "hourglass sand flowing",
+                    "stopwatch ticking hand",
+                    "rain window solitary figure",
+                    "foggy autumn winding road",
+                    "steaming coffee cup dawn desk",
+                    "dark hallway door opening light",
+                    "old pocket watch desk",
+                    "empty train platform dawn",
+                    "shadows clock ticking wall",
+                    "frosty window morning sunrise",
                 ]
             elif any(k in query.lower() for k in ["action", "start", "movement", "momentum", "first step", "move"]):
                 shots = [
-                    "running shoes",
-                    "sprint track",
-                    "typing keyboard",
-                    "rower rowing",
+                    "sprinter starting blocks athletic track",
+                    "weightlifter chalk powder barbell",
+                    "boxer hitting speed bag workout",
+                    "cyclist climbing steep mountain road",
+                    "swimmer diving into Olympic pool",
+                    "rowing team boat lake mist",
+                    "running shoes pavement morning",
+                    "rock climber gripping granite cliff",
+                    "basketball player jump shot court",
+                    "trail runner forest morning sunbeams",
                 ]
             elif any(k in query.lower() for k in ["compound", "result", "lifelong", "massive", "scale", "future", "victory", "extraordinary", "unstoppable"]):
                 shots = [
-                    "chess match",
-                    "mountain sunrise",
-                    "city sunrise",
-                    "domino effect",
+                    "mountain summit sunrise golden rays",
+                    "chess game grandmaster king checkmate",
+                    "domino falling chain reaction slow motion",
+                    "city skyline dawn golden hour aerial",
+                    "seedling sprouting green dark rich soil",
+                    "satellite orbit high earth view",
+                    "archery arrow hitting bullseye target",
+                    "lighthouse ocean waves storm beacon beam",
+                    "telescope night sky galaxy stars astronomy",
+                    "airplane wings soaring sunrise clouds",
+                    "ancient massive oak tree roots forest",
                 ]
             else:
                 shots = [
-                    "gym workout",
-                    "runner sunrise",
-                    "boxer training",
-                    "desk lamp working",
+                    "gym workout barbell deadlift power",
+                    "athlete sprinting beach sunrise waves",
+                    "boxer wrapping hands locker room",
+                    "study desk lamp open book writing",
+                    "martial arts karate training punch dojo",
+                    "marathon runners crossing bridge dawn",
+                    "artist focused oil painting canvas studio",
+                    "swimmer underwater butterfly stroke pool",
+                    "blacksmith hammering glowing iron anvil",
+                    "woodworker carving timber joinery workshop",
+                    "solo runner track stadium night lights",
                 ]
-            return shots[b_idx % len(shots)]
+            return shots[(seed_offset + b_idx) % len(shots)]
 
         # 2. Software Architecture / Coding / AI / Cloud
         is_tech = any(k in combined for k in [
@@ -539,12 +601,16 @@ class MediaFetcher:
         ])
         if is_tech:
             tech_shots = [
-                "coding monitor",
-                "datacenter server",
-                "cyber network",
-                "keyboard programming",
+                "coding multiple monitors dark room",
+                "datacenter glowing server racks rows",
+                "cyber network data stream nodes",
+                "hands typing mechanical keyboard close up",
+                "circuit board microchip glowing traces",
+                "cloud infrastructure architecture diagram screen",
+                "robotics arm automated precision factory",
+                "software engineer debugging laptop coffee",
             ]
-            return tech_shots[b_idx % len(tech_shots)]
+            return tech_shots[(seed_offset + b_idx) % len(tech_shots)]
 
         # 3. Preserve concrete physical entities if present
         concrete_tokens = [
@@ -608,41 +674,43 @@ class MediaFetcher:
 
     @classmethod
     def search_media(cls, query: str, require_video: bool = False, global_topic: str = "", is_shorts: bool = False) -> List[Dict[str, Any]]:
-        """Multi-source stock provider waterfall: Google CSE -> Pexels -> Pixabay -> Wikimedia Commons -> Coverr -> Openverse -> NASA."""
+        """Multi-source stock provider aggregator: Google CSE + Pexels + Pixabay + Wikimedia + Coverr + Openverse + NASA."""
+        results: List[Dict[str, Any]] = []
+
         g_results = cls.search_google_custom_search(query)
         if g_results:
-            return g_results
+            results.extend(g_results)
 
         orientation = "portrait" if is_shorts else "landscape"
         px_results = cls.search_pexels(query, require_video=require_video, orientation=orientation)
         if px_results:
-            return px_results
+            results.extend(px_results)
 
         pb_results = cls.search_pixabay(query, require_video=require_video)
         if pb_results:
-            return pb_results
+            results.extend(pb_results)
 
         wm_results = cls.search_wikimedia(query, require_video=require_video, global_topic=global_topic)
         if wm_results:
-            return wm_results
+            results.extend(wm_results)
 
         # Zero-cost open sources from Automated-Video-Generator architecture
         if require_video:
             cv_results = cls.search_coverr(query, global_topic=global_topic)
             if cv_results:
-                return cv_results
+                results.extend(cv_results)
         else:
             ov_results = cls.search_openverse(query, global_topic=global_topic)
             if ov_results:
-                return ov_results
+                results.extend(ov_results)
             nasa_results = cls.search_nasa(query)
             if nasa_results:
-                return nasa_results
+                results.extend(nasa_results)
             met_results = cls.search_metmuseum(query)
             if met_results:
-                return met_results
+                results.extend(met_results)
 
-        return []
+        return results
 
     @staticmethod
     def download_file(url: str, out_path: Path) -> bool:
@@ -689,15 +757,26 @@ class MediaFetcher:
         sentence_timings = scene.get("sentence_timings", [])
         if sentence_timings and isinstance(sentence_timings, list) and len(sentence_timings) >= 2:
             beats = []
-            for st in sentence_timings:
+            explicit_broll = scene.get("broll_beats", [])
+            for s_idx, st in enumerate(sentence_timings):
                 s_text = st["text"]
-                classification = classify_semantic_beat(s_text, global_topic=global_topic)
-                beats.append({
+                b_query = s_text
+                ai_prompt = None
+                if s_idx < len(explicit_broll) and isinstance(explicit_broll[s_idx], dict):
+                    eb = explicit_broll[s_idx]
+                    if eb.get("search_query"):
+                        b_query = eb["search_query"]
+                    ai_prompt = eb.get("ai_prompt")
+                classification = classify_semantic_beat(b_query, global_topic=global_topic)
+                beat_dict = {
                     "phrase": s_text,
-                    "query": s_text,
+                    "query": b_query,
                     "duration": float(st["duration"]),
                     **classification
-                })
+                }
+                if ai_prompt:
+                    beat_dict["ai_prompt"] = ai_prompt
+                beats.append(beat_dict)
             curr_sum = sum(b["duration"] for b in beats)
             if curr_sum > 0:
                 scale = total_duration / curr_sum
@@ -803,32 +882,43 @@ class MediaFetcher:
 
         # 2. Check or load pre-fetched verified topic pool (if authentic topic pool exists)
         pool = cls.prefetch_topic_media(global_topic)
+        def _is_url_already_used(u: str) -> bool:
+            if not u:
+                return True
+            return (u in cls._used_urls) or (u in cls._persistent_urls)
+
         if pool:
             query_words = [w.lower() for w in clean_q.split() if len(w) > 3]
 
-            # Pass 1: Try keyword match inside the authentic topic pool
-            for item in pool:
-                if item["url"] in cls._used_urls:
-                    continue
-                if any(w in item["title"].lower() for w in query_words):
-                    ext = ".webm" if item["type"] == "video" else ".jpg"
-                    target = out_dir / f"beat_{beat_id}{ext}"
-                    if cls.download_file(item["url"], target):
-                        if cls.verify_media_file(target, is_shorts=is_shorts):
-                            cls._used_urls.add(item["url"])
-                            return target
-                        else:
-                            target.unlink(missing_ok=True)
-
-            # Pass 2: Pick next available authentic item from pool
-            for item in pool:
-                if item["url"] in cls._used_urls:
-                    continue
+            # Pass 1: Try keyword match inside the authentic topic pool with random shuffling
+            p1_items = [
+                item for item in pool
+                if not _is_url_already_used(item.get("url", ""))
+                and any(w in item.get("title", "").lower() for w in query_words)
+            ]
+            random.shuffle(p1_items)
+            for item in p1_items:
                 ext = ".webm" if item["type"] == "video" else ".jpg"
                 target = out_dir / f"beat_{beat_id}{ext}"
                 if cls.download_file(item["url"], target):
                     if cls.verify_media_file(target, is_shorts=is_shorts):
-                        cls._used_urls.add(item["url"])
+                        cls._mark_url_used(item["url"])
+                        return target
+                    else:
+                        target.unlink(missing_ok=True)
+
+            # Pass 2: Pick next available authentic item from pool with random shuffling
+            p2_items = [
+                item for item in pool
+                if not _is_url_already_used(item.get("url", ""))
+            ]
+            random.shuffle(p2_items)
+            for item in p2_items:
+                ext = ".webm" if item["type"] == "video" else ".jpg"
+                target = out_dir / f"beat_{beat_id}{ext}"
+                if cls.download_file(item["url"], target):
+                    if cls.verify_media_file(target, is_shorts=is_shorts):
+                        cls._mark_url_used(item["url"])
                         return target
                     else:
                         target.unlink(missing_ok=True)
@@ -843,21 +933,24 @@ class MediaFetcher:
                 queries_to_try.append(clean_q)
 
         for q in queries_to_try:
-            time.sleep(0.2)
+            time.sleep(0.1)
             results = cls.search_media(q, global_topic=global_topic, is_shorts=is_shorts)
-            for item in results:
-                if item["url"] in cls._used_urls:
-                    continue
-                if cls.is_noise_candidate(item.get("title", ""), query=q, topic=global_topic):
-                    continue
+            candidates = [
+                item for item in results
+                if not _is_url_already_used(item.get("url", ""))
+                and not cls.is_noise_candidate(item.get("title", ""), query=q, topic=global_topic)
+            ]
+            random.shuffle(candidates)
+
+            for item in candidates:
                 ext = ".webm" if item["type"] == "video" else ".jpg"
                 target = out_dir / f"beat_{beat_id}{ext}"
                 if target.exists() and cls.verify_media_file(target, is_shorts=is_shorts):
-                    cls._used_urls.add(item["url"])
+                    cls._mark_url_used(item["url"])
                     return target
                 if cls.download_file(item["url"], target):
                     if cls.verify_media_file(target, is_shorts=is_shorts):
-                        cls._used_urls.add(item["url"])
+                        cls._mark_url_used(item["url"])
                         return target
                     else:
                         target.unlink(missing_ok=True)
