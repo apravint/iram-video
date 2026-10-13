@@ -471,11 +471,17 @@ class MediaFetcher:
         if not results and len(query.split()) > 2:
             stop_words = {"the", "a", "an", "in", "on", "at", "of", "and", "or", "for", "with", "out", "by", "from", "to", "up", "into"}
             content_words = [w for w in re.findall(r'\b[a-zA-Z]{3,}\b', query.lower()) if w not in stop_words]
+            candidate_queries = []
             if len(content_words) >= 2:
-                relaxed_q = f"{content_words[-2]} {content_words[-1]}"
-                return cls.search_coverr(relaxed_q, count=count, global_topic=global_topic, is_shorts=is_shorts)
-            elif len(content_words) == 1:
-                return cls.search_coverr(content_words[0], count=count, global_topic=global_topic, is_shorts=is_shorts)
+                candidate_queries.append(f"{content_words[-2]} {content_words[-1]}")
+                candidate_queries.append(f"{content_words[0]} {content_words[1]}")
+            for cw in content_words:
+                if cw not in candidate_queries:
+                    candidate_queries.append(cw)
+            for rq in candidate_queries:
+                r_hits = cls.search_coverr(rq, count=count, global_topic=global_topic, is_shorts=is_shorts)
+                if r_hits:
+                    return r_hits
 
         return results
 
@@ -936,6 +942,8 @@ class MediaFetcher:
                 and any(w in item.get("title", "").lower() for w in query_words)
             ]
             random.shuffle(p1_items)
+            if is_shorts:
+                p1_items.sort(key=lambda x: 0 if x.get("type") == "video" else 1)
             for item in p1_items:
                 ext = ".webm" if item["type"] == "video" else ".jpg"
                 target = out_dir / f"beat_{beat_id}{ext}"
@@ -952,6 +960,8 @@ class MediaFetcher:
                 if not _is_url_already_used(item.get("url", ""))
             ]
             random.shuffle(p2_items)
+            if is_shorts:
+                p2_items.sort(key=lambda x: 0 if x.get("type") == "video" else 1)
             for item in p2_items:
                 ext = ".webm" if item["type"] == "video" else ".jpg"
                 target = out_dir / f"beat_{beat_id}{ext}"
@@ -973,7 +983,7 @@ class MediaFetcher:
 
         for q in queries_to_try:
             time.sleep(0.1)
-            results = cls.search_media(q, global_topic=global_topic, is_shorts=is_shorts)
+            results = cls.search_media(q, require_video=is_shorts, global_topic=global_topic, is_shorts=is_shorts)
             candidates = [
                 item for item in results
                 if not _is_url_already_used(item.get("url", ""))
