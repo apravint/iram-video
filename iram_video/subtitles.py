@@ -166,17 +166,24 @@ class KineticSubtitleGenerator:
 
         is_tamil = (language.lower() in ["ta", "tamil"])
         font_name = "Mukta Malar" if is_tamil else "JetBrains Mono"
-        font_size = 56 if is_shorts else 44
-        margin_v = 440 if is_shorts else 180
+        if is_shorts:
+            font_size = 52
+            margin_v = 700      # Golden sweet spot: centered at y=1220 (above TikTok/Shorts UI bar)
+            lt_size = 28
+            lt_margin_v = 90    # Upper chyron at y=90 (safely above slide headers and badges)
+            lt_alignment = 7    # Top-Left alignment so it never touches subtitles
+        else:
+            font_size = 44
+            margin_v = 180      # Broadcast bottom margin
+            lt_size = 28
+            lt_margin_v = 90    # Broadcast lower-third
+            lt_alignment = 1    # Bottom-Left alignment
 
         # Primary Colors (AABBGGRR in ASS hex)
         if palette_key != "auto" and palette_key.lower() in SUBTITLE_PALETTES:
             accent_color = SUBTITLE_PALETTES[palette_key.lower()]
         else:
             accent_color = "\\c&H0000D7FF&" if is_shorts else "\\c&H00FFFFFF&"
-
-        lt_size = 26 if is_shorts else 28
-        lt_margin_v = 360 if is_shorts else 90
 
         header = f"""[Script Info]
 Title: IRAM Kinetic Subtitles
@@ -189,7 +196,7 @@ PlayResY: {res_y}
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,{font_name},{font_size},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,3,2,60,60,{margin_v},1
-Style: LowerThird,{font_name},{lt_size},&H00FFFFFF,&H0000FFFF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,3,2,1,70,70,{lt_margin_v},1
+Style: LowerThird,{font_name},{lt_size},&H00FFFFFF,&H0000FFFF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,3,2,{lt_alignment},70,70,{lt_margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

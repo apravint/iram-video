@@ -444,15 +444,15 @@ class AIVideoEngine:
             if res_img:
                 return res_img
 
-        # Tier 7: Public Domain Stock Archives (Wikimedia Commons & NASA HD Video/Photos)
-        stock_path = MediaFetcher.fetch_media_for_beat(query, out_dir, beat_id, global_topic=global_topic)
+        # Tier 7: Public Domain Stock Archives (Wikimedia Commons, Openverse, Coverr, NASA HD Video/Photos)
+        stock_path = MediaFetcher.fetch_media_for_beat(query, out_dir, beat_id, global_topic=global_topic, is_shorts=is_shorts)
         if stock_path.exists() and stock_path.stat().st_size > 5000:
             return stock_path
 
         # Tier 8: Documentary Motion Canvas Fallback
         fallback_img = out_dir / f"beat_{beat_id}.jpg"
         if not fallback_img.exists():
-            MediaFetcher.create_clean_documentary_frame(query, fallback_img)
+            MediaFetcher.create_clean_documentary_frame(query, fallback_img, is_shorts=is_shorts)
         return fallback_img
 
     @classmethod

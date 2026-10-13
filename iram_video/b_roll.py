@@ -19,7 +19,11 @@ NEGATIVE_NOISE_TERMS = [
     "bird", "tree", "plant", "forest", "florestal", "fruit", "animal", "cartoon",
     "graffiti", "anime", "toy", "nagaokakyo", "happy bus", "doll", "drawing",
     "illustration", "sketch", "comic", "painting", "clipart", "costume", "cosplay", "mask",
-    "flower", "season", "festival", "autumn", "summer", "winter", "blossom", "tulip", "cherry blossom"
+    "flower", "season", "festival", "autumn", "summer", "winter", "blossom", "tulip", "cherry blossom",
+    "book", "cover", "tarot", "card", "poster", "pamphlet", "sculpture", "figurine", "stamp", "coin",
+    "text", "document", "newspaper", "article", "statue", "tombstone", "grave", "manuscript", "plaque",
+    "diagram", "leaflet", "signage", "banner", "dreary", "democracy", "politics", "political", "election",
+    "receipt", "bill", "invoice", "protest", "flyer", "paperback", "monument", "memorial"
 ]
 
 NEGATIVE_GEO_NOISE = [
@@ -110,7 +114,11 @@ class MediaFetcher:
         top_low = topic.lower()
 
         # Reject domain noise (trees, fruits, anime buses)
+        is_nature_query = any(k in q_low or k in top_low for k in ["nature", "forest", "wildlife", "outdoor", "environment", "jungle", "landscape", "tree", "plant", "safari"])
+        nature_terms = {"forest", "tree", "plant", "florestal", "fruit", "animal", "bird", "flower", "season", "festival", "autumn", "summer", "winter", "blossom", "tulip", "cherry blossom"}
         for noise in NEGATIVE_NOISE_TERMS:
+            if is_nature_query and noise in nature_terms:
+                continue
             if noise in t_low and noise not in q_low and noise not in top_low:
                 return True
 
@@ -358,7 +366,7 @@ class MediaFetcher:
         return results
 
     @classmethod
-    def search_openverse(cls, query: str, require_video: bool = False, count: int = 8) -> List[Dict[str, Any]]:
+    def search_openverse(cls, query: str, require_video: bool = False, count: int = 8, global_topic: str = "") -> List[Dict[str, Any]]:
         """Searches Openverse API for zero-cost CC-licensed public imagery (ported from Automated-Video-Generator)."""
         if require_video:
             return []
@@ -369,6 +377,9 @@ class MediaFetcher:
             with urllib.request.urlopen(req, timeout=6) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 for r in data.get("results", []):
+                    title = r.get("title", "")
+                    if cls.is_noise_candidate(title, query=query, topic=global_topic):
+                        continue
                     img_url = r.get("url")
                     if img_url:
                         results.append({
@@ -376,7 +387,7 @@ class MediaFetcher:
                             "url": img_url,
                             "width": r.get("width", 1920),
                             "height": r.get("height", 1080),
-                            "title": r.get("title", "Openverse CC Image"),
+                            "title": title or "Openverse CC Image",
                             "provider": "openverse"
                         })
         except Exception as e:
@@ -384,7 +395,7 @@ class MediaFetcher:
         return results
 
     @classmethod
-    def search_coverr(cls, query: str, count: int = 6) -> List[Dict[str, Any]]:
+    def search_coverr(cls, query: str, count: int = 6, global_topic: str = "") -> List[Dict[str, Any]]:
         """Searches Coverr for free, unwatermarked stock video clips (ported from Automated-Video-Generator)."""
         results = []
         try:
@@ -394,6 +405,9 @@ class MediaFetcher:
                 data = json.loads(resp.read().decode("utf-8"))
                 videos = data.get("data") or data.get("videos") or []
                 for v in videos:
+                    title = v.get("title", "")
+                    if cls.is_noise_candidate(title, query=query, topic=global_topic):
+                        continue
                     v_url = v.get("url") or (f"https://storage.coverr.co/videos/{v['file']}" if v.get("file") else None)
                     if v_url:
                         results.append({
@@ -401,7 +415,7 @@ class MediaFetcher:
                             "url": v_url,
                             "width": v.get("width", 1920),
                             "height": v.get("height", 1080),
-                            "title": v.get("title", "Coverr Free Video"),
+                            "title": title or "Coverr Free Video",
                             "provider": "coverr"
                         })
         except Exception as e:
@@ -466,17 +480,120 @@ class MediaFetcher:
             pass
         return results
 
+    @classmethod
+    def expand_visual_query(cls, query: str, topic: str = "", beat_id: str = "") -> str:
+        """
+        Translates abstract semantic narration & topic phrases into concrete, high-aesthetic
+        physical cinematography queries (runners at sunrise, boxing, glowing cityscapes, dominos)
+        that stock engines index effectively.
+        """
+        combined = f"{topic} {query}".lower()
+
+        # Parse index from beat_id for shot variety across beats
+        b_idx = 0
+        m = re.search(r'\d+', str(beat_id))
+        if m:
+            b_idx = int(m.group())
+
+        # 1. Mindset / Motivation / Discipline / Habit
+        is_mindset = any(k in combined for k in [
+            "discipline", "motivation", "unstoppable", "mindset", "habit",
+            "focus", "success", "willpower", "trap", "action", "results",
+            "execution", "hesitation", "procrastination", "grind", "commit"
+        ])
+        if is_mindset:
+            if any(k in query.lower() for k in ["trap", "wait", "ready", "hesitat", "procrastin", "doubt", "comfort", "feel", "inspire", "stuck"]):
+                shots = [
+                    "alarm clock",
+                    "person rain window",
+                    "hourglass",
+                    "foggy road",
+                ]
+            elif any(k in query.lower() for k in ["action", "start", "movement", "momentum", "first step", "move"]):
+                shots = [
+                    "running shoes",
+                    "sprint track",
+                    "typing keyboard",
+                    "rower rowing",
+                ]
+            elif any(k in query.lower() for k in ["compound", "result", "lifelong", "massive", "scale", "future", "victory", "extraordinary", "unstoppable"]):
+                shots = [
+                    "chess match",
+                    "mountain sunrise",
+                    "city sunrise",
+                    "domino effect",
+                ]
+            else:
+                shots = [
+                    "gym workout",
+                    "runner sunrise",
+                    "boxer training",
+                    "desk lamp working",
+                ]
+            return shots[b_idx % len(shots)]
+
+        # 2. Software Architecture / Coding / AI / Cloud
+        is_tech = any(k in combined for k in [
+            "code", "software", "java", "spring", "python", "developer", "cloud",
+            "server", "database", "api", "virtual thread", "loom", "system", "architecture"
+        ])
+        if is_tech:
+            tech_shots = [
+                "coding monitor",
+                "datacenter server",
+                "cyber network",
+                "keyboard programming",
+            ]
+            return tech_shots[b_idx % len(tech_shots)]
+
+        # 3. Preserve concrete physical entities if present
+        concrete_tokens = [
+            "metro", "train", "rail", "airport", "plane", "rocket", "satellite",
+            "car", "bridge", "port", "ship", "temple", "tower", "mountain", "ocean",
+            "highway", "city", "building", "laboratory", "factory", "stadium"
+        ]
+        clean_words = [w for w in query.split() if len(w) > 2]
+        matched_concrete = [w for w in clean_words if any(ct in w.lower() for ct in concrete_tokens)]
+        if matched_concrete:
+            return f"{' '.join(matched_concrete[:3])} cinematic 4k"
+
+        # 4. Fallback: clean words + cinematic
+        stopwords = {
+            "the", "and", "for", "with", "from", "about", "how", "why", "what",
+            "this", "that", "over", "into", "when", "your", "secret", "becoming"
+        }
+        filtered = [w for w in clean_words if w.lower() not in stopwords]
+        if filtered:
+            return f"{' '.join(filtered[:3])} cinematic 4k"
+
+        return "cinematic documentary scenery 4k"
+
     @staticmethod
-    def verify_media_file(file_path: Path, min_size_bytes: int = 4000) -> bool:
-        """Verifies media asset is non-empty, non-corrupt, and decodable via PIL/ffprobe."""
+    def verify_media_file(file_path: Path, min_size_bytes: int = 4000, is_shorts: bool = False) -> bool:
+        """Verifies media asset is non-empty, non-corrupt, and decodable via PIL/ffprobe with luminance and aspect ratio checks."""
         p = Path(file_path)
         if not p.exists() or p.stat().st_size < min_size_bytes:
             return False
         ext = p.suffix.lower()
         if ext in [".jpg", ".jpeg", ".png", ".webp"]:
             try:
+                from PIL import ImageStat
                 with Image.open(p) as img:
-                    img.verify()
+                    img_rgb = img.convert("RGB")
+                    stat = ImageStat.Stat(img_rgb)
+                    r, g, b = stat.mean[:3]
+                    lum = 0.299 * r + 0.587 * g + 0.114 * b
+                    r_std, g_std, b_std = stat.stddev[:3]
+                    avg_std = (r_std + g_std + b_std) / 3.0
+
+                    # Reject underexposed / pitch-black images (< 12, e.g. Dreary) or pure white washed-out scans (> 252)
+                    if lum < 12 or lum > 252:
+                        return False
+
+                    # For 9:16 Shorts: reject extreme landscape panoramas (w / h > 2.6)
+                    if is_shorts and (img.width / max(1, img.height)) > 2.6:
+                        return False
+
                 return True
             except Exception:
                 return False
@@ -511,11 +628,11 @@ class MediaFetcher:
 
         # Zero-cost open sources from Automated-Video-Generator architecture
         if require_video:
-            cv_results = cls.search_coverr(query)
+            cv_results = cls.search_coverr(query, global_topic=global_topic)
             if cv_results:
                 return cv_results
         else:
-            ov_results = cls.search_openverse(query)
+            ov_results = cls.search_openverse(query, global_topic=global_topic)
             if ov_results:
                 return ov_results
             nasa_results = cls.search_nasa(query)
@@ -665,19 +782,30 @@ class MediaFetcher:
         return beats
 
     @classmethod
-    def fetch_media_for_beat(cls, query: str, out_dir: Path, beat_id: str, global_topic: str = "") -> Path:
+    def fetch_media_for_beat(
+        cls,
+        query: str,
+        out_dir: Path,
+        beat_id: str,
+        global_topic: str = "",
+        is_shorts: bool = False
+    ) -> Path:
         """
         Finds and downloads a unique, authentic B-roll video clip or high-res photo for an individual beat.
-        Uses the pre-fetched verified topic pool first to guarantee 100% semantic relevance with zero rate-limits.
+        Uses semantic visual expansion (mapping abstract concepts into physical cinematography) and
+        validates media quality, brightness/luminance, and aspect ratio.
         """
         out_dir.mkdir(parents=True, exist_ok=True)
         clean_q = query.strip()
 
-        # 1. Check or load pre-fetched verified topic pool
+        # 1. Expand query into concrete cinematography query
+        expanded_q = cls.expand_visual_query(clean_q, topic=global_topic, beat_id=beat_id)
+
+        # 2. Check or load pre-fetched verified topic pool (if authentic topic pool exists)
         pool = cls.prefetch_topic_media(global_topic)
         if pool:
             query_words = [w.lower() for w in clean_q.split() if len(w) > 3]
-            
+
             # Pass 1: Try keyword match inside the authentic topic pool
             for item in pool:
                 if item["url"] in cls._used_urls:
@@ -686,8 +814,11 @@ class MediaFetcher:
                     ext = ".webm" if item["type"] == "video" else ".jpg"
                     target = out_dir / f"beat_{beat_id}{ext}"
                     if cls.download_file(item["url"], target):
-                        cls._used_urls.add(item["url"])
-                        return target
+                        if cls.verify_media_file(target, is_shorts=is_shorts):
+                            cls._used_urls.add(item["url"])
+                            return target
+                        else:
+                            target.unlink(missing_ok=True)
 
             # Pass 2: Pick next available authentic item from pool
             for item in pool:
@@ -696,45 +827,51 @@ class MediaFetcher:
                 ext = ".webm" if item["type"] == "video" else ".jpg"
                 target = out_dir / f"beat_{beat_id}{ext}"
                 if cls.download_file(item["url"], target):
-                    cls._used_urls.add(item["url"])
-                    return target
+                    if cls.verify_media_file(target, is_shorts=is_shorts):
+                        cls._used_urls.add(item["url"])
+                        return target
+                    else:
+                        target.unlink(missing_ok=True)
 
-        # 2. Dynamic search fallback with rate-limit protection
-        anchor = cls.extract_anchor_phrase(global_topic)
-        queries_to_try = []
-        if anchor and anchor.lower() not in clean_q.lower():
-            queries_to_try.append(f"{anchor} {clean_q}".strip())
-        else:
-            queries_to_try.append(clean_q)
-
-        if anchor and anchor not in queries_to_try:
-            queries_to_try.append(anchor)
+        # 3. Dynamic multi-source search fallback with rate-limit protection
+        queries_to_try = [expanded_q]
+        if expanded_q != clean_q:
+            queries_to_try.append(f"{expanded_q} cinematic")
+            # If clean_q has concrete physical terms, also try it
+            concrete_tokens = ["train", "metro", "car", "rocket", "airplane", "bridge", "tower", "city", "building"]
+            if any(term in clean_q.lower() for term in concrete_tokens):
+                queries_to_try.append(clean_q)
 
         for q in queries_to_try:
-            time.sleep(0.3)
-            results = cls.search_media(q, global_topic=global_topic)
+            time.sleep(0.2)
+            results = cls.search_media(q, global_topic=global_topic, is_shorts=is_shorts)
             for item in results:
                 if item["url"] in cls._used_urls:
                     continue
+                if cls.is_noise_candidate(item.get("title", ""), query=q, topic=global_topic):
+                    continue
                 ext = ".webm" if item["type"] == "video" else ".jpg"
                 target = out_dir / f"beat_{beat_id}{ext}"
-                if target.exists() and target.stat().st_size > 5000:
+                if target.exists() and cls.verify_media_file(target, is_shorts=is_shorts):
                     cls._used_urls.add(item["url"])
                     return target
                 if cls.download_file(item["url"], target):
-                    cls._used_urls.add(item["url"])
-                    return target
+                    if cls.verify_media_file(target, is_shorts=is_shorts):
+                        cls._used_urls.add(item["url"])
+                        return target
+                    else:
+                        target.unlink(missing_ok=True)
 
-        # 3. Clean documentary frame fallback
+        # 4. Clean documentary frame fallback
         fallback_img = out_dir / f"beat_{beat_id}.jpg"
-        if not fallback_img.exists():
-            cls.create_clean_documentary_frame(query, fallback_img)
+        if not fallback_img.exists() or not cls.verify_media_file(fallback_img, is_shorts=is_shorts):
+            cls.create_clean_documentary_frame(query, fallback_img, is_shorts=is_shorts)
         return fallback_img
 
     @classmethod
-    def fetch_scene_broll(cls, query: str, out_dir: Path, scene_idx: int, global_topic: str = "") -> Path:
+    def fetch_scene_broll(cls, query: str, out_dir: Path, scene_idx: int, global_topic: str = "", is_shorts: bool = False) -> Path:
         """Finds and downloads real B-roll video or photo for a scene."""
-        return cls.fetch_media_for_beat(query, out_dir, f"scene_{scene_idx:02d}", global_topic=global_topic)
+        return cls.fetch_media_for_beat(query, out_dir, f"scene_{scene_idx:02d}", global_topic=global_topic, is_shorts=is_shorts)
 
     @classmethod
     def create_clean_documentary_frame(
@@ -770,11 +907,29 @@ class MediaFetcher:
         fta_sm, fen_sm = get_fonts(18 if is_shorts else 20, bold=False)
         fta_code, fen_code = get_fonts(20 if is_shorts else 22, bold=False)
 
-        # 2. Category badge
-        badge_y = 60 if not is_shorts else 120
-        badge_text = "ENTERPRISE ARCHITECTURE & ENGINEERING"
+        # 2. Clean headline first (so topic detection and card rendering have the title)
+        headline = (title or "System Architecture").strip()
+        headline = re.sub(r'[\r\n\t]+', ' ', headline)[:100]
+
+        # 3. Category badge
+        badge_y = 60 if not is_shorts else 145
+        is_mindset = any(k in headline.lower() for k in ["discipline", "motivation", "unstoppable", "mindset", "habit", "focus", "success", "willpower", "trap", "action", "results", "execution"])
+        from .motion_canvas import detect_code_language, MotionCanvas
+        is_code_topic = any(k in headline.lower() for k in [
+            "java", "spring", "code", "thread", "virtual", "compile", "rest", "api", "loom", "graalvm",
+            "python", "rust", "golang", "typescript", "javascript", "sql", "bash", "linux", "c++"
+        ])
+
+        if is_code_topic:
+            badge_text = "SOFTWARE ARCHITECTURE & CODE"
+        elif is_mindset:
+            badge_text = "MINDSET & RELENTLESS EXECUTION"
+        else:
+            badge_text = "STRATEGIC ANALYSIS & INSIGHT"
+
+        badge_w = 400 if is_shorts else 440
         draw.rounded_rectangle(
-            [(80, badge_y), (80 + 440, badge_y + 36)],
+            [(80, badge_y), (80 + badge_w, badge_y + 36)],
             radius=6,
             fill=(30, 41, 59, 220),
             outline=(59, 130, 246, 200),
@@ -782,20 +937,19 @@ class MediaFetcher:
         )
         draw_mixed_line(draw, 96, badge_y + 8, badge_text, (56, 189, 248), fta_sm, fen_sm)
 
-        # 3. Clean headline
-        headline = (title or "System Architecture").strip()
-        headline = re.sub(r'[\r\n\t]+', ' ', headline)[:100]
-        lines = wrap_text(headline, fta_lg, fen_lg, 1200 if not is_shorts else 800, draw)
+        # 4. Clean headline placement
+        max_title_w = w - 160
+        lines = wrap_text(headline, fta_lg, fen_lg, max_title_w, draw)
         title_y = badge_y + 55
         for line in lines[:2]:
             draw_mixed_line(draw, 80, title_y, line, (248, 250, 252), fta_lg, fen_lg)
-            title_y += 54
+            title_y += 50 if is_shorts else 54
 
-        # 4. Main Presentation Container Card
+        # 5. Main Presentation Container Card (safely placed above kinetic subtitle zone)
         card_x = 80
         card_y = title_y + 25
         card_w = w - 160
-        card_h = (h - card_y - 80)
+        card_h = min(780, 1060 - card_y) if is_shorts else (h - card_y - 80)
 
         # Draw glassmorphism card
         draw.rounded_rectangle(
@@ -813,11 +967,6 @@ class MediaFetcher:
 
         # Window title bar & content detection
         content_y = card_y + 70
-        from .motion_canvas import detect_code_language, MotionCanvas
-        is_code_topic = any(k in headline.lower() for k in [
-            "java", "spring", "code", "thread", "virtual", "compile", "rest", "api", "loom", "graalvm",
-            "python", "rust", "golang", "typescript", "javascript", "sql", "bash", "linux", "c++"
-        ])
 
         if is_code_topic:
             detected_lang, detected_fname = detect_code_language(headline, title)
@@ -834,22 +983,36 @@ class MediaFetcher:
                 draw_mixed_line(draw, card_x + 75, content_y, c_txt, c_col, fta_code, fen_code)
                 content_y += 34
         else:
-            win_title = "ExecutiveOverview.yaml"
+            win_title = "DisciplinePlaybook.yaml" if is_mindset else "ExecutiveOverview.yaml"
             draw_mixed_line(draw, card_x + 90, card_y + 16, win_title, (148, 163, 184), fta_sm, fen_sm)
             draw.line([(card_x, card_y + 48), (card_x + card_w, card_y + 48)], fill=(30, 41, 59), width=1)
 
-            pillars = [
-                (f"⚡ Core Breakthrough: {headline[:35]}", "Transformative performance and structural efficiency across the domain.", (56, 189, 248)),
-                ("🛡️ Enterprise Resilience & Scale", "Engineered for robust reliability, verified metrics, and zero downtime.", (34, 197, 94)),
-                ("🚀 Strategic Impact & Next-Gen Velocity", "Accelerating workflows and delivering tangible outcomes at scale.", (245, 158, 11)),
-            ]
+            if is_mindset:
+                pillars = [
+                    (f"⚡ Core Principle: {headline[:30]}", "Small daily commitments compound into massive lifelong results.", (56, 189, 248)),
+                    ("🛡️ Relentless Execution", "Show up and do the work regardless of emotional hesitation.", (34, 197, 94)),
+                    ("🚀 Action Drives Momentum", "Action produces emotion, not the reverse. Move first.", (245, 158, 11)),
+                ]
+            else:
+                pillars = [
+                    (f"⚡ Core Breakthrough: {headline[:32]}", "Transformative structural efficiency across the domain.", (56, 189, 248)),
+                    ("🛡️ Enterprise Resilience & Scale", "Engineered for robust reliability, verified metrics, zero downtime.", (34, 197, 94)),
+                    ("🚀 Strategic Next-Gen Impact", "Accelerating workflows and delivering tangible outcomes at scale.", (245, 158, 11)),
+                ]
+
+            max_desc_w = card_w - 70
             for p_title, p_desc, p_color in pillars:
-                if content_y + 70 > card_y + card_h - 20:
+                desc_lines = wrap_text(p_desc, fta_sm, fen_sm, max_desc_w, draw)
+                block_h = 32 + (len(desc_lines) * 26) + 16
+                if content_y + block_h > card_y + card_h - 10:
                     break
-                draw.rectangle([(card_x + 30, content_y + 4), (card_x + 36, content_y + 28)], fill=p_color)
-                draw_mixed_line(draw, card_x + 48, content_y, p_title, (248, 250, 252), fta_md, fen_md)
-                draw_mixed_line(draw, card_x + 48, content_y + 36, p_desc, (148, 163, 184), fta_sm, fen_sm)
-                content_y += 85
+                draw.rectangle([(card_x + 24, content_y + 4), (card_x + 30, content_y + 26)], fill=p_color)
+                draw_mixed_line(draw, card_x + 40, content_y, p_title, (248, 250, 252), fta_md, fen_md)
+                d_y = content_y + 32
+                for d_l in desc_lines:
+                    draw_mixed_line(draw, card_x + 40, d_y, d_l, (148, 163, 184), fta_sm, fen_sm)
+                    d_y += 26
+                content_y = d_y + 14
 
         # 6. Bottom footer tag
         footer_text = "IRAM FILM STUDIO • UNIVERSAL HIGH-QUALITY PRODUCTION"
