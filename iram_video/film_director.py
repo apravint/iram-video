@@ -64,14 +64,26 @@ class FilmDirector:
         else:
             user_msg += "LANGUAGE: Produce screenplay in English with Hollywood cinematic dialogue.\n"
 
+        # Force single-column composition layout logic when handling vertical aspect ratios
+        if style_hint and "shorts" in str(style_hint).lower():
+            user_msg += (
+                "\nCRITICAL SHORTS VIEWPORT CONSTRAINT:\n"
+                "- The output will be rendered inside a tight vertical 9:16 layout screen.\n"
+                "- For EVERY scene, limit active dialogue to ONE character only or alternate who speaks scene-by-scene.\n"
+                "- NEVER output both characters talking concurrently in the same scene container.\n"
+                "- This leaves canvas area open to preserve high-DPI crisp text resolution.\n"
+            )
+
         models_to_try = [self.model] if self.model else FALLBACK_MODELS
         last_error = None
+        cfg = types.GenerateContentConfig(temperature=0.75, top_p=0.90)
 
         for m in models_to_try:
             try:
                 response = self.client.models.generate_content(
                     model=m,
-                    contents=[FILM_DIRECTOR_SYSTEM_PROMPT + "\n\n" + user_msg]
+                    contents=[FILM_DIRECTOR_SYSTEM_PROMPT + "\n\n" + user_msg],
+                    config=cfg
                 )
                 raw = response.text.strip()
                 if raw.startswith("```json"):
@@ -82,13 +94,14 @@ class FilmDirector:
                     raw = raw[:-3]
                 raw = raw.strip()
 
+                from .director import Director
                 try:
                     screenplay = json.loads(raw)
-                    return screenplay
+                    return Director.sanitize_screenplay(screenplay)
                 except json.JSONDecodeError as e:
                     match = re.search(r"\{.*\}", raw, re.DOTALL)
                     if match:
-                        return json.loads(match.group(0))
+                        return Director.sanitize_screenplay(json.loads(match.group(0)))
                     raise ValueError(f"Failed to parse JSON: {e}")
             except Exception as e:
                 print(f"[Notice] Film director model {m} unavailable ({e}), trying fallback...")

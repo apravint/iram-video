@@ -93,6 +93,14 @@ def classify_semantic_beat(phrase: str, global_topic: str = "") -> Dict[str, Any
     t_low = text.lower()
     top_low = (global_topic or "").lower()
 
+    # Narrative, Mindset, Documentary, and Cinema topics MUST use Real B-Roll Video, not generic UI cards
+    is_narrative = any(k in top_low for k in ["fear", "action", "mindset", "motivation", "discipline", "life", "story", "history", "philosophy", "war", "cinema", "documentary", "truth", "habit", "conquer", "bold"])
+    if is_narrative:
+        return {
+            "beat_type": "real_media",
+            "phrase": text
+        }
+
     # 1. Top-N Listicle & Countdown Detection (#1, #2, rank, top 5, winner)
     rank_m = re.search(r'(?:#|rank\s*|number\s*|no\.?\s*)(\d+)', t_low)
     if rank_m or any(k in t_low for k in ["winner", "top choice", "#1 winner", "number one"]):
@@ -258,11 +266,13 @@ class MotionCanvas:
             "-s", f"{width}x{height}",
             "-pix_fmt", "rgb24",
             "-r", str(fps),
+            "-sws_flags", "lanczos+accurate_rnd",
             "-i", "-",
             "-vf", "setsar=1",
             "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-crf", "18",
+            "-preset", "medium",
+            "-crf", "16",
+            "-tune", "animation",
             "-pix_fmt", "yuv420p",
             "-colorspace", "bt709",
             "-color_primaries", "bt709",
@@ -317,11 +327,18 @@ class MotionCanvas:
         cw = card_x2 - card_x1
         ch = card_y2 - card_y1
 
-        fta_pill, fen_pill = get_fonts(16, bold=True)
-        fta_head, fen_head = get_fonts(28, bold=True)
-        fta_num, fen_num = get_fonts(84, bold=True)
-        fta_unit, fen_unit = get_fonts(38, bold=True)
-        fta_sub, fen_sub = get_fonts(20, bold=False)
+        if is_shorts:
+            fta_pill, fen_pill = get_fonts(22, bold=True)
+            fta_head, fen_head = get_fonts(38, bold=True)
+            fta_num, fen_num = get_fonts(110, bold=True)
+            fta_unit, fen_unit = get_fonts(48, bold=True)
+            fta_sub, fen_sub = get_fonts(28, bold=False)
+        else:
+            fta_pill, fen_pill = get_fonts(16, bold=True)
+            fta_head, fen_head = get_fonts(28, bold=True)
+            fta_num, fen_num = get_fonts(84, bold=True)
+            fta_unit, fen_unit = get_fonts(38, bold=True)
+            fta_sub, fen_sub = get_fonts(20, bold=False)
 
         proc = cls._create_ffmpeg_writer(out_path, w, h, fps)
 

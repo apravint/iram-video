@@ -566,13 +566,20 @@ class VideoStudioHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 return
 
-            candidate1 = (OUTPUTS_DIR / safe_name).resolve()
-            candidate2 = (Path.cwd() / safe_name).resolve()
-            target_file = None
-            if candidate1.exists() and candidate1.is_file() and str(candidate1).startswith(str(OUTPUTS_DIR.resolve())):
-                target_file = candidate1
-            elif candidate2.exists() and candidate2.is_file() and str(candidate2).startswith(str(Path.cwd().resolve())):
-                target_file = candidate2
+            # HIGH QUALITY SECURITY FIX: Use explicit relative path containment anchors
+            try:
+                candidate1 = (OUTPUTS_DIR / safe_name).resolve()
+                candidate2 = (Path.cwd() / safe_name).resolve()
+                target_file = None
+                
+                if candidate1.is_file() and candidate1.is_relative_to(OUTPUTS_DIR.resolve()):
+                    target_file = candidate1
+                elif candidate2.is_file() and candidate2.is_relative_to(Path.cwd().resolve()):
+                    target_file = candidate2
+            except Exception:
+                self.send_response(400)
+                self.end_headers()
+                return
 
             if not target_file:
                 self.send_response(404)

@@ -167,14 +167,37 @@ VIDEO_TEMPLATES = {
     }
 }
 
-def get_template(template_name: Optional[str]) -> Dict[str, Any]:
-    """Retrieves template configuration with fallback to explainer."""
+def get_template(template_name: Optional[str], is_shorts: bool = False) -> Dict[str, Any]:
+    """Retrieves template configuration with intelligent vertical aspect mapping filters."""
     if not template_name:
         tmpl = VIDEO_TEMPLATES["explainer"]
     else:
         key = template_name.lower().strip().replace("-", "_").replace(" ", "_")
         tmpl = VIDEO_TEMPLATES.get(key, VIDEO_TEMPLATES["explainer"])
-    res = dict(tmpl)
+
+    import copy
+    res = copy.deepcopy(tmpl)
+
+    # RETINA GRID OVERRIDE: Enforce vertical layout adaptations for Shorts viewport space
+    if is_shorts:
+        vertical_structure = []
+        for scene in res.get("structure", []):
+            mod_scene = dict(scene)
+            # Convert landscape multi-column elements to single-column phone viewports
+            if mod_scene.get("layout") in ["pillars", "comparison"]:
+                mod_scene["layout"] = "hero_metric" if "Winner" in mod_scene.get("role", "") else "stack_list"
+            vertical_structure.append(mod_scene)
+        res["structure"] = vertical_structure
+
+        # Inject layout warnings directly into the AI director constraints
+        res["director_directive"] = res.get("director_directive", "") + (
+            "\nCRITICAL MOBILE FORMAT REQUIREMENT:\n"
+            "- Visual viewport is strictly 9:16 VERTICAL.\n"
+            "- Enforce SINGLE-COLUMN card presentation structures only.\n"
+            "- Never request side-by-side grids or dual horizontal items.\n"
+            "- Limit cards to a maximum of 1 or 2 items stacked vertically to preserve clear font details.\n"
+        )
+
     res["default_color_grade"] = res.get("default_grade", "clean")
     res["directorial_hints"] = res.get("director_directive", "")
     return res

@@ -35,14 +35,14 @@ class VideoCompiler:
             self._prepare_character_sprites()
 
     def _prepare_character_sprites(self):
-        """Generates cycling animated sprite frames for the character mascot."""
+        """Generates cycling animated sprite frames for the character mascot with high-DPI scaling."""
         char_name = self.character or "robot"
-        cw, ch = (320, 420) if self.is_shorts else (380, 480)
+        cw, ch = (640, 840) if self.is_shorts else (760, 960)
         
         mouth_sequence = [0.0, 0.4, 0.85, 0.5, 0.15, 0.0]
         for i, mouth in enumerate(mouth_sequence):
             eye = "blink" if i == 4 else ("happy" if i in [2, 3] else "normal")
-            bob = int(math.sin(i * 1.05) * 8)
+            bob = int(math.sin(i * 1.05) * 16)
             img = CharacterRenderer.render_character(
                 char_name,
                 w=cw,
@@ -108,8 +108,8 @@ class VideoCompiler:
 
             # Teal & Orange cinematic color matrix
             post_filters.append("colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18")
-            # 35mm analog film grain
-            post_filters.append("noise=alls=12:allf=t+u")
+            # 35mm analog film grain (smooth gaussian noise)
+            post_filters.append("noise=alls=3:allf=g")
 
         # 4. Fade in/out
         post_filters.append(f"fade=t=in:st=0:d=0.35,fade=t=out:st={fade_out:.2f}:d=0.35")
@@ -140,9 +140,12 @@ class VideoCompiler:
             "-map", f"{audio_idx}:a",
             *af_opts,
             "-c:v", "libx264",
-            "-preset", "veryfast",
+            "-preset", "medium",
+            "-crf", "16",
+            "-tune", "animation",
             "-c:a", "aac",
-            "-b:a", "192k",
+            "-b:a", "320k",
+            "-ac", "2",
             "-pix_fmt", "yuv420p",
             "-t", f"{duration:.3f}",
             str(out_clip)
@@ -212,24 +215,25 @@ class VideoCompiler:
         if v_filters:
             filter_complex_list.append(f"[0:v]{','.join(v_filters)},setsar=1,format=yuv420p[vout]")
             maps.extend(["-map", "[vout]"])
-            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
+            video_codec_args = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-b:v", "15M", "-maxrate", "20M", "-bufsize", "30M", *STANDARD_BT709_ARGS]
         else:
             filter_complex_list.append("[0:v]setsar=1,format=yuv420p[vout]")
             maps.extend(["-map", "[vout]"])
-            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
+            video_codec_args = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-b:v", "15M", "-maxrate", "20M", "-bufsize", "30M", *STANDARD_BT709_ARGS]
 
         if bg_music and bg_music.exists():
             filter_complex_list.append(
-                f"[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[voice_master];"
+                f"[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5[voice_raw];"
+                f"[voice_raw]loudnorm=I=-15:TP=-1.5:LRA=9[voice_master];"
                 f"[1:a]lowpass=f=4000,volume={music_vol:.2f}[bg_clean];"
                 f"[bg_clean][voice_master]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
-                f"[voice_master][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+                f"[voice_master][ducked]amix=inputs=2:duration=first:dropout_transition=2,loudnorm=I=-14:LRA=7:TP=-1.5[aout]"
             )
             maps.extend(["-map", "[aout]"])
             audio_inputs = ["-i", str(bg_music)]
         else:
             filter_complex_list.append(
-                "[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[aout]"
+                "[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-14:LRA=7:TP=-1.5[aout]"
             )
             maps.extend(["-map", "[aout]"])
             audio_inputs = []
@@ -243,6 +247,7 @@ class VideoCompiler:
             *video_codec_args,
             "-c:a", "aac",
             "-b:a", "320k",
+            "-ac", "2",
             "-ar", "48000",
             "-movflags", "+faststart",
             str(final_output)

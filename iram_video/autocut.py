@@ -154,6 +154,9 @@ def smart_assemble(
         "-filter_complex", full_filter,
         "-map", "[outv]",
         "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "16",
+        "-tune", "film",
         "-pix_fmt", "yuv420p",
         "-t", f"{target_duration:.3f}",
         str(out_path)
@@ -169,6 +172,9 @@ def smart_assemble(
             "-i", str(video_path),
             "-t", f"{target_duration:.3f}",
             "-c:v", "libx264",
+            "-preset", "medium",
+            "-crf", "16",
+            "-tune", "film",
             "-pix_fmt", "yuv420p",
             str(out_path)
         ]

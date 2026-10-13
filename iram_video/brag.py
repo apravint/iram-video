@@ -31,7 +31,9 @@ class BragHarvester:
         readme_candidates = list(repo_path.glob("README*"))
         if readme_candidates:
             try:
-                text = readme_candidates[0].read_text(encoding="utf-8")
+                # FIX: Isolate open stream contexts cleanly using with limits
+                with open(readme_candidates[0], "r", encoding="utf-8", errors="ignore") as rf:
+                    text = rf.read(64000) # Limit read depth to 64KB to dodge prompt overflow traps
                 # Title
                 m_title = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
                 if m_title:

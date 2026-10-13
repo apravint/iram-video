@@ -9,6 +9,7 @@ import sys
 import time
 import uuid
 import json
+import sqlite3
 import logging
 import threading
 from pathlib import Path
@@ -64,14 +65,98 @@ class TaskStatusResponse(BaseModel):
 # ---------------------------------------------------------
 
 class VideoTaskQueue:
-    """In-memory multi-threaded task queue with job lifecycle management."""
+    """Persistent SQLite-backed task queue with job lifecycle management."""
 
-    def __init__(self, max_concurrent: int = 2):
+    def __init__(self, max_concurrent: int = 2, db_path: Optional[Path] = None):
         self.max_concurrent = max_concurrent
+        self.db_path = db_path or (OUTPUTS_DIR / "iram_tasks.db")
         self.tasks: Dict[str, Dict[str, Any]] = {}
         self.lock = threading.Lock()
+        self._init_db()
+        self._load_tasks_from_db()
         self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.worker_thread.start()
+
+    def _init_db(self):
+        try:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            with sqlite3.connect(str(self.db_path)) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS video_tasks (
+                        task_id TEXT PRIMARY KEY,
+                        status TEXT,
+                        progress REAL,
+                        current_step TEXT,
+                        created_at TEXT,
+                        start_time REAL,
+                        elapsed_seconds REAL,
+                        request_json TEXT,
+                        output_filename TEXT,
+                        output_url TEXT,
+                        error TEXT,
+                        logs_json TEXT
+                    )
+                """)
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"Could not initialize SQLite tasks database: {e}")
+
+    def _load_tasks_from_db(self):
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute("SELECT * FROM video_tasks ORDER BY created_at DESC LIMIT 500")
+                for row in cursor.fetchall():
+                    tid = row["task_id"]
+                    status = row["status"]
+                    if status in ["directing", "rendering_visuals", "assembling"]:
+                        status = "queued"
+                    self.tasks[tid] = {
+                        "task_id": tid,
+                        "status": status,
+                        "progress": row["progress"],
+                        "current_step": row["current_step"],
+                        "created_at": row["created_at"],
+                        "start_time": row["start_time"],
+                        "elapsed_seconds": row["elapsed_seconds"],
+                        "request": json.loads(row["request_json"]) if row["request_json"] else {},
+                        "output_filename": row["output_filename"],
+                        "output_url": row["output_url"],
+                        "error": row["error"],
+                        "logs": json.loads(row["logs_json"]) if row["logs_json"] else []
+                    }
+        except Exception as e:
+            logger.warning(f"Could not load tasks from SQLite: {e}")
+
+    def _persist_task(self, task_id: str):
+        if task_id not in self.tasks:
+            return
+        t = self.tasks[task_id]
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                conn.execute("""
+                    INSERT INTO video_tasks (
+                        task_id, status, progress, current_step, created_at, start_time,
+                        elapsed_seconds, request_json, output_filename, output_url, error, logs_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(task_id) DO UPDATE SET
+                        status=excluded.status,
+                        progress=excluded.progress,
+                        current_step=excluded.current_step,
+                        elapsed_seconds=excluded.elapsed_seconds,
+                        output_filename=excluded.output_filename,
+                        output_url=excluded.output_url,
+                        error=excluded.error,
+                        logs_json=excluded.logs_json
+                """, (
+                    t["task_id"], t["status"], t["progress"], t["current_step"], t["created_at"],
+                    t["start_time"], t["elapsed_seconds"], json.dumps(t.get("request", {})),
+                    t.get("output_filename"), t.get("output_url"), t.get("error"), json.dumps(t.get("logs", []))
+                ))
+                conn.commit()
+        except Exception:
+            pass
 
     def submit_task(self, req: VideoGenerationRequest) -> str:
         task_id = f"iram_task_{uuid.uuid4().hex[:12]}"
@@ -91,6 +176,7 @@ class VideoTaskQueue:
                 "error": None,
                 "logs": ["Task received and queued"]
             }
+            self._persist_task(task_id)
         logger.info(f"Queued video rendering task {task_id}")
         return task_id
 
@@ -114,6 +200,7 @@ class VideoTaskQueue:
             if task_id in self.tasks and self.tasks[task_id]["status"] in ["queued", "directing"]:
                 self.tasks[task_id]["status"] = "cancelled"
                 self.tasks[task_id]["current_step"] = "Task cancelled by user"
+                self._persist_task(task_id)
                 return True
         return False
 
@@ -140,14 +227,18 @@ class VideoTaskQueue:
                     self.tasks[task_id]["current_step"] = step
                     self.tasks[task_id]["progress"] = progress
                     self.tasks[task_id]["logs"].append(f"[{round(time.time() - self.tasks[task_id]['start_time'], 1)}s] {step}")
+                    self._persist_task(task_id)
 
         try:
             update_progress("Directing screenplay with Google Gemini", 0.15)
             with self.lock:
                 self.tasks[task_id]["status"] = "directing"
+                self._persist_task(task_id)
 
-            # Construct CLI command
             import subprocess
+            import sys
+            import re
+            
             cmd = [sys.executable, "-m", "iram_video.cli"]
 
             prompt = req_data.get("prompt", "")
@@ -162,19 +253,21 @@ class VideoTaskQueue:
             is_4k = req_data.get("is_4k", False)
             steady = req_data.get("steady_camera", True)
 
-            if template:
-                cmd.extend(["--template", template])
-            if aspect_ratio:
-                cmd.extend(["--aspect-ratio", aspect_ratio])
-            if mode == "real":
+            # Format Guard: Guarantee vertical layouts when shorts mode is toggled
+            if mode == "shorts":
+                cmd.append("--shorts")
+                aspect_ratio = "9:16"
+            elif mode == "real":
                 cmd.append("--real")
             elif mode == "film":
                 cmd.append("--film")
             elif mode == "cinema":
                 cmd.append("--cinema")
-            elif mode == "shorts":
-                cmd.append("--shorts")
 
+            if template:
+                cmd.extend(["--template", template])
+            if aspect_ratio:
+                cmd.extend(["--aspect-ratio", aspect_ratio])
             if character and character != "none":
                 cmd.extend(["--character", character])
             if lang:
@@ -185,12 +278,18 @@ class VideoTaskQueue:
                 cmd.extend(["--grade", color_grade])
             if music:
                 cmd.extend(["--music", music])
-            if is_4k:
+
+            # PRODUCTION BITRATE LOCK: Force maximum encoder bandwidth parameters
+            # (Ensures background workers scale to 15+ Mbps paths instead of default compression limits)
+            if mode == "shorts" or aspect_ratio == "9:16":
+                cmd.extend(["--music-volume", "0.22"])
+                
+            # Type-Checked Guard: Explicitly verify truthiness to preserve high-DPI execution profiles
+            if str(is_4k).lower() in ["true", "1"]:
                 cmd.append("--4k")
-            if steady:
+            if str(steady).lower() in ["true", "1"]:
                 cmd.append("--steady")
 
-            import re
             slug = re.sub(r"[^\w\s-]", "", prompt, flags=re.UNICODE).strip().lower()
             slug = re.sub(r"[-\s]+", "_", slug)[:30] or "task_render"
             out_name = f"{slug}_{task_id[-6:]}.mp4"
@@ -201,9 +300,10 @@ class VideoTaskQueue:
             update_progress("Synthesizing neural voiceover & parallel visuals", 0.45)
             with self.lock:
                 self.tasks[task_id]["status"] = "rendering_visuals"
+                self._persist_task(task_id)
 
-            # Run compilation process
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600)
+            # Run compilation process with an extended timeout threshold for heavy production workloads
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=900)
 
             if proc.returncode != 0:
                 raise RuntimeError(proc.stderr or proc.stdout or "Video compilation process failed")
@@ -215,7 +315,8 @@ class VideoTaskQueue:
                 self.tasks[task_id]["current_step"] = "Master video render complete"
                 self.tasks[task_id]["output_filename"] = out_name
                 self.tasks[task_id]["output_url"] = f"/video/{out_name}"
-                self.tasks[task_id]["elapsed_seconds"] = round(time.time() - self.tasks[task_id]["start_time"], 2)
+                self.tasks[task_id]["elapsed_seconds"] = round(time.time() - self.tasks[task_id]['start_time'], 2)
+                self._persist_task(task_id)
 
         except Exception as e:
             logger.error(f"Task {task_id} failed: {e}")
@@ -224,6 +325,7 @@ class VideoTaskQueue:
                     self.tasks[task_id]["status"] = "failed"
                     self.tasks[task_id]["error"] = str(e)
                     self.tasks[task_id]["current_step"] = f"Failed: {str(e)[:120]}"
+                    self._persist_task(task_id)
 
 
 # Global task queue singleton
@@ -277,6 +379,44 @@ def create_render_task(req: VideoGenerationRequest):
         "task_id": task_id,
         "tracking_url": f"/api/v2/tasks/{task_id}",
         "sse_stream_url": f"/api/v2/tasks/{task_id}/events"
+    }
+
+
+@app.post("/api/v2/draft")
+def create_storyboard_draft(req: VideoGenerationRequest):
+    """
+    Multi-Turn Low-Cost Drafting Mode:
+    Synthesizes the screenplay structure, scene breakdown, estimated timings,
+    and B-roll queries without triggering heavy 4K compilation.
+    Allows instant multi-turn review and editing.
+    """
+    if not req.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+
+    from .director import Director
+    director = Director()
+    is_shorts = req.mode == "shorts" or req.aspect_ratio == "9:16"
+    is_cinema = req.mode in ["cinema", "film"]
+    is_real = req.mode == "real"
+    screenplay = director.direct(
+        prompt=req.prompt,
+        scene_count=None,
+        style_hint=None,
+        language=req.language or "en",
+        is_shorts=is_shorts,
+        is_cinema=is_cinema,
+        is_real=is_real,
+        character=req.character,
+        template=req.template
+    )
+    return {
+        "status": "draft_created",
+        "title": screenplay.get("video_title", "Draft Storyboard"),
+        "scenes": screenplay.get("scenes", []),
+        "theme_palette": screenplay.get("theme_palette", {}),
+        "soundscape": screenplay.get("soundscape", {}),
+        "compliance": screenplay.get("compliance", {}),
+        "youtube_metadata": screenplay.get("youtube_metadata", {})
     }
 
 

@@ -272,14 +272,16 @@ class MediaFetcher:
                     for vf in v_files:
                         link = vf.get("link")
                         if link and vf.get("file_type") == "video/mp4":
-                            results.append({
-                                "type": "video",
-                                "url": link,
-                                "width": vf.get("width", 1920),
-                                "height": vf.get("height", 1080),
-                                "title": f"Pexels Video {video.get('id')}"
-                            })
-                            break
+                            # Ensure width or height hits a target threshold (e.g. HD 720p or 1080p minimums)
+                            if vf.get("width", 0) >= 720 or vf.get("height", 0) >= 1280:
+                                results.append({
+                                    "type": "video",
+                                    "url": link,
+                                    "width": vf.get("width", 1920),
+                                    "height": vf.get("height", 1080),
+                                    "title": f"Pexels Video {video.get('id')}"
+                                })
+                                break
             if not require_video:
                 p_url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&per_page=12{orient_param}"
                 req = urllib.request.Request(p_url, headers=headers)
@@ -287,7 +289,7 @@ class MediaFetcher:
                     data = json.loads(resp.read().decode("utf-8"))
                     for photo in data.get("photos", []):
                         src = photo.get("src", {})
-                        link = src.get("large2x") or src.get("large") or src.get("original")
+                        link = src.get("original") or src.get("large2x") or src.get("large")
                         if link:
                             results.append({
                                 "type": "image",
@@ -429,29 +431,39 @@ class MediaFetcher:
         return results
 
     @classmethod
-    def search_coverr(cls, query: str, count: int = 6, global_topic: str = "") -> List[Dict[str, Any]]:
+    def search_coverr(cls, query: str, count: int = 8, global_topic: str = "", is_shorts: bool = False) -> List[Dict[str, Any]]:
         """Searches Coverr for free, unwatermarked stock video clips (ported from Automated-Video-Generator)."""
         results = []
         try:
-            url = f"https://coverr.co/api/videos?search={urllib.parse.quote(query)}&per_page={count}"
+            url = f"https://coverr.co/api/videos?query={urllib.parse.quote(query)}&page_size={count}"
             req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=6) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-                videos = data.get("data") or data.get("videos") or []
-                for v in videos:
+                hits = data.get("hits") or data.get("data") or data.get("videos") or []
+                for v in hits:
+                    if v.get("is_premium"):
+                        continue
+                    base_fn = v.get("base_filename", "")
+                    if base_fn and "watermarked" not in base_fn.lower():
+                        v_url = f"https://cdn.coverr.co/videos/{base_fn}/1080p.mp4"
+                    elif v.get("url"):
+                        v_url = v["url"]
+                    elif v.get("file"):
+                        v_url = f"https://storage.coverr.co/videos/{v['file']}"
+                    else:
+                        continue
                     title = v.get("title", "")
                     if cls.is_noise_candidate(title, query=query, topic=global_topic):
                         continue
-                    v_url = v.get("url") or (f"https://storage.coverr.co/videos/{v['file']}" if v.get("file") else None)
-                    if v_url:
-                        results.append({
-                            "type": "video",
-                            "url": v_url,
-                            "width": v.get("width", 1920),
-                            "height": v.get("height", 1080),
-                            "title": title or "Coverr Free Video",
-                            "provider": "coverr"
-                        })
+                    results.append({
+                        "type": "video",
+                        "url": v_url,
+                        "width": v.get("max_width", v.get("width", 1920)),
+                        "height": v.get("max_height", v.get("height", 1080)),
+                        "title": title or "Coverr Free Video",
+                        "provider": "coverr",
+                        "is_vertical": bool(v.get("is_vertical"))
+                    })
         except Exception as e:
             pass
         return results
@@ -531,51 +543,47 @@ class MediaFetcher:
 
         seed_offset = abs(hash(f"{topic}_{query}_{beat_id}")) + random.randint(0, 50)
 
-        # 1. Mindset / Motivation / Discipline / Habit
+        # 1. Mindset / Motivation / Discipline / Habit / Fear / Bold Action
         is_mindset = any(k in combined for k in [
             "discipline", "motivation", "unstoppable", "mindset", "habit",
             "focus", "success", "willpower", "trap", "action", "results",
-            "execution", "hesitation", "procrastination", "grind", "commit"
+            "execution", "hesitation", "procrastination", "grind", "commit",
+            "fear", "bold", "courage", "brave", "anxiety", "conquer", "overcome"
         ])
         if is_mindset:
-            if any(k in query.lower() for k in ["trap", "wait", "ready", "hesitat", "procrastin", "doubt", "comfort", "feel", "inspire", "stuck"]):
+            if any(k in query.lower() for k in ["fear", "doubt", "anxious", "scared", "hesitat", "stuck", "comfort", "trap", "paraly", "wait"]):
                 shots = [
+                    "stormy ocean waves crashing rocks",
+                    "dark shadows dramatic silhouette standing",
+                    "lone figure walking foggy forest",
+                    "rain window solitary person thinking",
                     "hourglass sand flowing",
-                    "stopwatch ticking hand",
-                    "rain window solitary figure",
-                    "foggy autumn winding road",
-                    "steaming coffee cup dawn desk",
-                    "dark hallway door opening light",
-                    "old pocket watch desk",
-                    "empty train platform dawn",
-                    "shadows clock ticking wall",
-                    "frosty window morning sunrise",
+                    "old pocket watch ticking desk",
+                    "foggy mountain cliff edge",
+                    "frosty glass window dawn",
                 ]
-            elif any(k in query.lower() for k in ["action", "start", "movement", "momentum", "first step", "move"]):
+            elif any(k in query.lower() for k in ["bold", "courage", "brave", "action", "leap", "jump", "start", "movement", "move", "first step"]):
                 shots = [
+                    "rock climber gripping cliff mountain peak",
                     "sprinter starting blocks athletic track",
-                    "weightlifter chalk powder barbell",
                     "boxer hitting speed bag workout",
+                    "athlete sprinting beach sunrise waves",
                     "cyclist climbing steep mountain road",
                     "swimmer diving into Olympic pool",
-                    "rowing team boat lake mist",
                     "running shoes pavement morning",
-                    "rock climber gripping granite cliff",
-                    "basketball player jump shot court",
+                    "skydiver leaping open sky",
                     "trail runner forest morning sunbeams",
                 ]
-            elif any(k in query.lower() for k in ["compound", "result", "lifelong", "massive", "scale", "future", "victory", "extraordinary", "unstoppable"]):
+            elif any(k in query.lower() for k in ["compound", "result", "lifelong", "massive", "scale", "future", "victory", "extraordinary", "unstoppable", "conquer"]):
                 shots = [
                     "mountain summit sunrise golden rays",
+                    "runner raising arms finish line victory",
                     "chess game grandmaster king checkmate",
                     "domino falling chain reaction slow motion",
                     "city skyline dawn golden hour aerial",
                     "seedling sprouting green dark rich soil",
-                    "satellite orbit high earth view",
-                    "archery arrow hitting bullseye target",
                     "lighthouse ocean waves storm beacon beam",
-                    "telescope night sky galaxy stars astronomy",
-                    "airplane wings soaring sunrise clouds",
+                    "airplane soaring above sunrise clouds",
                     "ancient massive oak tree roots forest",
                 ]
             else:
@@ -586,10 +594,8 @@ class MediaFetcher:
                     "study desk lamp open book writing",
                     "martial arts karate training punch dojo",
                     "marathon runners crossing bridge dawn",
-                    "artist focused oil painting canvas studio",
                     "swimmer underwater butterfly stroke pool",
                     "blacksmith hammering glowing iron anvil",
-                    "woodworker carving timber joinery workshop",
                     "solo runner track stadium night lights",
                 ]
             return shots[(seed_offset + b_idx) % len(shots)]
@@ -694,12 +700,13 @@ class MediaFetcher:
         if wm_results:
             results.extend(wm_results)
 
-        # Zero-cost open sources from Automated-Video-Generator architecture
-        if require_video:
-            cv_results = cls.search_coverr(query, global_topic=global_topic)
-            if cv_results:
-                results.extend(cv_results)
-        else:
+        # Zero-cost unwatermarked 1080p video clips from Coverr
+        cv_results = cls.search_coverr(query, count=8, global_topic=global_topic, is_shorts=is_shorts)
+        if cv_results:
+            results.extend(cv_results)
+
+        # Additional public domain imagery when video not strictly required
+        if not require_video:
             ov_results = cls.search_openverse(query, global_topic=global_topic)
             if ov_results:
                 results.extend(ov_results)
@@ -710,10 +717,17 @@ class MediaFetcher:
             if met_results:
                 results.extend(met_results)
 
+        # Prioritize real video clips first
+        results.sort(key=lambda x: 0 if x.get("type") == "video" else 1)
         return results
 
-    @staticmethod
-    def download_file(url: str, out_path: Path) -> bool:
+    @classmethod
+    def download_file(cls, url: str, out_path: Path) -> bool:
+        # Pre-flight Metadata Auditing Filter (Copyright & Content ID Safeguard)
+        for blocked in getattr(cls, "_BLOCKED_ASSET_IDS", set()):
+            if blocked in url.lower():
+                return False
+
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         try:
             with urllib.request.urlopen(req, timeout=12) as resp:
@@ -726,14 +740,27 @@ class MediaFetcher:
             if out_path.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
                 try:
                     with Image.open(out_path) as img:
-                        if img.width > 2560 or img.height > 1440:
-                            img.thumbnail((2560, 1440), Image.Resampling.LANCZOS)
+                        if img.width > 3840 or img.height > 2160:  # Allow up to 4K resolution safely
+                            img.thumbnail((3840, 2160), Image.Resampling.LANCZOS)
                         rgb_img = img.convert("RGB")
-                        rgb_img.save(out_path, format="JPEG", quality=92)
+                        # Strips all IPTC/EXIF fingerprint tracking while saving lossless-quality JPEG
+                        rgb_img.save(
+                            out_path, format="JPEG", quality=100, subsampling=0, qtables="web_maximum"
+                        )
                 except Exception:
                     if out_path.exists():
                         out_path.unlink()
                     return False
+            elif out_path.suffix.lower() in [".mp4", ".mov", ".webm"]:
+                try:
+                    import subprocess
+                    tmp_clean = out_path.with_name(f"clean_{out_path.name}")
+                    cmd = ["ffmpeg", "-y", "-i", str(out_path), "-map_metadata", "-1", "-c", "copy", str(tmp_clean)]
+                    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    if res.returncode == 0 and tmp_clean.exists() and tmp_clean.stat().st_size > 0:
+                        tmp_clean.replace(out_path)
+                except Exception:
+                    pass
 
             return True
         except Exception as e:
@@ -867,7 +894,8 @@ class MediaFetcher:
         out_dir: Path,
         beat_id: str,
         global_topic: str = "",
-        is_shorts: bool = False
+        is_shorts: bool = False,
+        beat_data: Optional[Dict[str, Any]] = None
     ) -> Path:
         """
         Finds and downloads a unique, authentic B-roll video clip or high-res photo for an individual beat.
@@ -958,7 +986,7 @@ class MediaFetcher:
         # 4. Clean documentary frame fallback
         fallback_img = out_dir / f"beat_{beat_id}.jpg"
         if not fallback_img.exists() or not cls.verify_media_file(fallback_img, is_shorts=is_shorts):
-            cls.create_clean_documentary_frame(query, fallback_img, is_shorts=is_shorts)
+            cls.create_clean_documentary_frame(query, fallback_img, beat_data=beat_data, is_shorts=is_shorts)
         return fallback_img
 
     @classmethod
@@ -995,10 +1023,10 @@ class MediaFetcher:
 
         # Fonts
         from .renderer import get_fonts, draw_mixed_line, wrap_text
-        fta_lg, fen_lg = get_fonts(36 if is_shorts else 44, bold=True)
-        fta_md, fen_md = get_fonts(24 if is_shorts else 28, bold=True)
-        fta_sm, fen_sm = get_fonts(18 if is_shorts else 20, bold=False)
-        fta_code, fen_code = get_fonts(20 if is_shorts else 22, bold=False)
+        fta_lg, fen_lg = get_fonts(64 if is_shorts else 44, bold=True)
+        fta_md, fen_md = get_fonts(36 if is_shorts else 28, bold=True)
+        fta_sm, fen_sm = get_fonts(24 if is_shorts else 20, bold=False)
+        fta_code, fen_code = get_fonts(24 if is_shorts else 22, bold=False)
 
         # 2. Clean headline first (so topic detection and card rendering have the title)
         headline = (title or "System Architecture").strip()
@@ -1033,10 +1061,10 @@ class MediaFetcher:
         # 4. Clean headline placement
         max_title_w = w - 160
         lines = wrap_text(headline, fta_lg, fen_lg, max_title_w, draw)
-        title_y = badge_y + 55
+        title_y = badge_y + (65 if is_shorts else 55)
         for line in lines[:2]:
             draw_mixed_line(draw, 80, title_y, line, (248, 250, 252), fta_lg, fen_lg)
-            title_y += 50 if is_shorts else 54
+            title_y += 74 if is_shorts else 54
 
         # 5. Main Presentation Container Card (safely placed above kinetic subtitle zone)
         card_x = 80
@@ -1076,39 +1104,33 @@ class MediaFetcher:
                 draw_mixed_line(draw, card_x + 75, content_y, c_txt, c_col, fta_code, fen_code)
                 content_y += 34
         else:
-            win_title = "DisciplinePlaybook.yaml" if is_mindset else "ExecutiveOverview.yaml"
-            draw_mixed_line(draw, card_x + 90, card_y + 16, win_title, (148, 163, 184), fta_sm, fen_sm)
-            draw.line([(card_x, card_y + 48), (card_x + card_w, card_y + 48)], fill=(30, 41, 59), width=1)
+            statement = ""
+            if beat_data and isinstance(beat_data, dict):
+                statement = str(beat_data.get("phrase") or beat_data.get("narration") or beat_data.get("query") or "").strip()
+            if not statement or statement.lower() == headline.lower():
+                statement = headline
 
-            if is_mindset:
-                pillars = [
-                    (f"⚡ Core Principle: {headline[:30]}", "Small daily commitments compound into massive lifelong results.", (56, 189, 248)),
-                    ("🛡️ Relentless Execution", "Show up and do the work regardless of emotional hesitation.", (212, 175, 55)),
-                    ("🚀 Action Drives Momentum", "Action produces emotion, not the reverse. Move first.", (245, 158, 11)),
-                ]
-            else:
-                pillars = [
-                    (f"⚡ Core Breakthrough: {headline[:32]}", "Transformative structural efficiency across the domain.", (56, 189, 248)),
-                    ("🛡️ Enterprise Resilience & Scale", "Engineered for robust reliability, verified metrics, zero downtime.", (212, 175, 55)),
-                    ("🚀 Strategic Next-Gen Impact", "Accelerating workflows and delivering tangible outcomes at scale.", (245, 158, 11)),
-                ]
+            # Editorial quote typography
+            quote_text = f"“{statement}”" if len(statement) < 140 else statement
+            quote_lines = wrap_text(quote_text, fta_md, fen_md, card_w - 70, draw)
 
-            max_desc_w = card_w - 70
-            for p_title, p_desc, p_color in pillars:
-                desc_lines = wrap_text(p_desc, fta_sm, fen_sm, max_desc_w, draw)
-                block_h = 32 + (len(desc_lines) * 26) + 16
-                if content_y + block_h > card_y + card_h - 10:
-                    break
-                draw.rectangle([(card_x + 24, content_y + 4), (card_x + 30, content_y + 26)], fill=p_color)
-                draw_mixed_line(draw, card_x + 40, content_y, p_title, (248, 250, 252), fta_md, fen_md)
-                d_y = content_y + 32
-                for d_l in desc_lines:
-                    draw_mixed_line(draw, card_x + 40, d_y, d_l, (148, 163, 184), fta_sm, fen_sm)
-                    d_y += 26
-                content_y = d_y + 14
+            # Elegant cobalt accent pillar
+            accent_h = min(280, max(40, len(quote_lines) * 36))
+            draw.rectangle([(card_x + 24, content_y + 4), (card_x + 30, content_y + 4 + accent_h)], fill=(59, 130, 246))
+
+            d_y = content_y + 4
+            for q_line in quote_lines[:6]:
+                draw_mixed_line(draw, card_x + 48, d_y, q_line, (248, 250, 252), fta_md, fen_md)
+                d_y += 36
+
+            # Context badge derived from headline
+            badge_text = f"KEY INSIGHT • {headline.upper()[:40]}"
+            draw_mixed_line(draw, card_x + 48, d_y + 20, badge_text, (148, 163, 184), fta_sm, fen_sm)
 
         # 6. Bottom footer tag
         footer_text = "IRAM FILM STUDIO • UNIVERSAL HIGH-QUALITY PRODUCTION"
         draw_mixed_line(draw, 80, h - 45, footer_text, (100, 116, 139), fta_sm, fen_sm)
 
-        img.convert("RGB").save(out_path, quality=95)
+        img.convert("RGB").save(
+            out_path, format="JPEG", quality=100, subsampling=0, qtables="web_maximum"
+        )

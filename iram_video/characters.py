@@ -18,14 +18,15 @@ class CharacterRenderer:
         draw = ImageDraw.Draw(img)
         cx = w // 2
         cy_shift = bob_offset
+        s_f = w / 400.0
 
         # Antenna
-        draw.line([(cx, 70 + cy_shift), (cx, 30 + cy_shift)], fill=(0, 229, 255, 255), width=6)
-        draw.ellipse([(cx - 12, 18 + cy_shift), (cx + 12, 42 + cy_shift)], fill=(0, 255, 200, 255), outline=(255, 255, 255, 255), width=2)
+        draw.line([(cx, int(70 * s_f) + cy_shift), (cx, int(30 * s_f) + cy_shift)], fill=(0, 229, 255, 255), width=max(1, int(6 * s_f)))
+        draw.ellipse([(cx - int(12 * s_f), int(18 * s_f) + cy_shift), (cx + int(12 * s_f), int(42 * s_f) + cy_shift)], fill=(0, 255, 200, 255), outline=(255, 255, 255, 255), width=max(1, int(2 * s_f)))
 
         # Head Chassis
-        head_box = (cx - 100, 70 + cy_shift, cx + 100, 210 + cy_shift)
-        draw.rounded_rectangle(head_box, radius=35, fill=(20, 28, 48, 255), outline=(0, 229, 255, 255), width=5)
+        head_box = (cx - int(100 * s_f), int(70 * s_f) + cy_shift, cx + int(100 * s_f), int(210 * s_f) + cy_shift)
+        draw.rounded_rectangle(head_box, radius=max(1, int(35 * s_f)), fill=(20, 28, 48, 255), outline=(0, 229, 255, 255), width=max(1, int(5 * s_f)))
 
         # Face Display
         screen_box = (cx - 80, 90 + cy_shift, cx + 80, 190 + cy_shift)
@@ -294,11 +295,20 @@ class CharacterRenderer:
         bob_offset: int = 0
     ) -> Image.Image:
         c_type = character_type.lower()
+
+        # Double the canvas boundaries to generate rich sampling details
+        supersample_w = w * 2
+        supersample_h = h * 2
+        supersample_bob = bob_offset * 2
+
         if "ferris" in c_type or "rust" in c_type:
-            return cls.draw_ferris(w, h, mouth_open, eye_state, pointing, bob_offset)
+            img = cls.draw_ferris(supersample_w, supersample_h, mouth_open, eye_state, pointing, supersample_bob)
         elif "gopher" in c_type or "go" in c_type:
-            return cls.draw_gopher(w, h, mouth_open, eye_state, pointing, bob_offset)
+            img = cls.draw_gopher(supersample_w, supersample_h, mouth_open, eye_state, pointing, supersample_bob)
         elif "presenter" in c_type or "girl" in c_type or "aria" in c_type or "pallavi" in c_type:
-            return cls.draw_presenter(w, h, mouth_open, eye_state, pointing, bob_offset)
+            img = cls.draw_presenter(supersample_w, supersample_h, mouth_open, eye_state, pointing, supersample_bob)
         else: # default robot
-            return cls.draw_robot(w, h, mouth_open, eye_state, pointing, bob_offset)
+            img = cls.draw_robot(supersample_w, supersample_h, mouth_open, eye_state, pointing, supersample_bob)
+
+        # Downscale the supersampled asset to the target size for crisp edges
+        return img.resize((w, h), Image.Resampling.LANCZOS)

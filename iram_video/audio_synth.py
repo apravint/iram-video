@@ -8,12 +8,14 @@ SAMPLE_RATE = 44100
 def synthesize_mood_track(mood: str, duration_sec: float, output_path: Path):
     """Synthesizes high-quality ambient background soundtrack using pure numpy waveform synthesis."""
     if mood == "none":
-        # Create silent track
+        # HIGH QUALITY AUDIO FIX: Stack mono arrays horizontally to build clean stereo data buffers
+        mono_silence = np.zeros(int(SAMPLE_RATE * duration_sec), dtype=np.int16)
+        stereo_silence = np.stack((mono_silence, mono_silence), axis=-1)
         with wave.open(str(output_path), "w") as wf:
-            wf.setnchannels(1)
+            wf.setnchannels(2)
             wf.setsampwidth(2)
             wf.setframerate(SAMPLE_RATE)
-            wf.writeframes(np.zeros(int(SAMPLE_RATE * duration_sec), dtype=np.int16).tobytes())
+            wf.writeframes(stereo_silence.tobytes())
         return
 
     t = np.linspace(0, duration_sec, int(SAMPLE_RATE * duration_sec), endpoint=False)
@@ -74,11 +76,13 @@ def synthesize_mood_track(mood: str, duration_sec: float, output_path: Path):
             mix[-fade_len:] *= np.linspace(1, 0, fade_len)
 
         audio_int16 = (mix * 32767).astype(np.int16)
+        # FIX: Interleave the cinematic mix vector into dual-channel stereo streams
+        stereo_signal = np.stack((audio_int16, audio_int16), axis=-1)
         with wave.open(str(output_path), "w") as wf:
-            wf.setnchannels(1)
+            wf.setnchannels(2)
             wf.setsampwidth(2)
             wf.setframerate(SAMPLE_RATE)
-            wf.writeframes(audio_int16.tobytes())
+            wf.writeframes(stereo_signal.tobytes())
         return
 
     if mood in ["documentary", "acoustic", "piano", "real"]:
@@ -191,8 +195,9 @@ def synthesize_mood_track(mood: str, duration_sec: float, output_path: Path):
         mix[-fade_len:] *= np.linspace(1, 0, fade_len)
 
     audio_int16 = (mix * 32767).astype(np.int16)
+    stereo_signal = np.stack((audio_int16, audio_int16), axis=-1)
     with wave.open(str(output_path), "w") as wf:
-        wf.setnchannels(1)
+        wf.setnchannels(2)
         wf.setsampwidth(2)
         wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(audio_int16.tobytes())
+        wf.writeframes(stereo_signal.tobytes())

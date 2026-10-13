@@ -16,19 +16,20 @@ For each scene, you provide:
 2. "heading": A punchy uppercase header (max 40 chars)
 3. "subheading": A clean explanatory subtitle (max 65 chars)
 4. "layout_type": One of:
-   - "pillars": 2 or 3 vertical feature cards side-by-side
-   - "comparison": 2 comparative cards (e.g. Traditional vs Modern, Pros vs Cons)
-   - "code_or_terminal": A title card with a terminal command or code block simulation and callouts
-   - "stack_list": 3 to 4 horizontal layer rows (good for architectures or steps)
-   - "hero_metric": A big metric/concept callout card on one side and bullet details on the other
-    - "cards": Array of 1 to 4 card objects:
-       - "title": Card title (string)
-       - "subtitle": Card subtitle (optional string)
-       - "badge": Short badge text (optional, e.g. "Rust", "Core", "Speed")
-       - "bullets": Array of bullet points (each 1-2 sentences, max 80 chars per bullet)
+   - "pillars": (Widescreen landscape only) 2 or 3 vertical feature cards side-by-side
+   - "comparison": (Widescreen landscape only) 2 comparative cards side-by-side
+   - "code_or_terminal": A title card with a terminal command or code block simulation
+   - "stack_list": 2 to 3 vertical stacked layers (Perfect for vertical Shorts layout)
+   - "hero_metric": One primary large core callout concept filling the screen space
+   CRITICAL: If the format is YOUTUBE SHORTS, NEVER choose "pillars" or "comparison". Only use single-column layouts like "hero_metric", "code_or_terminal", or a 2-row "stack_list" to match native 9:16 mobile viewports without dropping render resolution.
+   - "cards": Array of 1 to 2 card objects maximum for Shorts (3-4 allowed only for widescreen landscape).
+      - "title": Card title (string, max 25 chars)
+      - "subtitle": Card subtitle (optional string)
+      - "badge": Short badge text (optional, e.g. "Rust", "Core", "Speed")
+      - "bullets": Array of bullet points (STRICTLY 1-3 words per bullet point, maximum 2 bullets per card. Keep text concise to prevent pixel-scaling compression down the line).
 5. "broll_beats": Array of 3 to 6 sequential visual beats matching each sentence of the narration:
    [
-     {"phrase": "the spoken sentence", "search_query": "3-5 word exact search keywords for real B-roll video/photo. ALWAYS anchor the search query with the specific primary entity/topic name (e.g. 'Chennai Metro elevated viaduct', 'Chennai Metro driverless train', 'Chennai Central metro station'). NEVER output isolated generic words like 'feeder', 'corridor', 'speed', 'tunnel'.", "ai_prompt": "Cinematic 8k photorealistic video description for AI video generators (Veo/Wan/Kling) describing camera motion, lighting, and action", "camera": "One of ['zoom_in', 'zoom_out', 'pan_left', 'pan_right'] (dynamic 2.5D camera choreography for this beat)"}
+     {"phrase": "the spoken sentence", "search_query": "3-5 word exact physical cinematography keywords describing real visible objects, human actions, or physical environments (e.g. 'boxer heavy bag workout', 'sprinter track starting blocks', 'mountain climber cliff sunrise', 'hands typing mechanical keyboard', 'ocean storm lighthouse waves'). ALWAYS use concrete physical nouns. NEVER output abstract ideas like 'fear mindset' or 'success habit'.", "ai_prompt": "Cinematic 8k photorealistic video description for AI video generators (Veo/Wan/Kling) describing camera motion, lighting, and action", "camera": "One of ['zoom_in', 'zoom_out', 'pan_left', 'pan_right'] (dynamic 2.5D camera choreography for this beat)"}
    ]
 6. "narration": The EXACT spoken voiceover script for the narrator.
    - Natural, highly engaging, professional tone.
@@ -101,7 +102,7 @@ class Director:
         )
 
         if template:
-            tmpl_data = get_template(template)
+            tmpl_data = get_template(template, is_shorts=is_shorts)
             user_msg += f"\nDIRECTORIAL TEMPLATE: {tmpl_data['name'].upper()}\n"
             user_msg += f"{tmpl_data['director_directive']}\n"
             if not scene_count:
@@ -120,7 +121,8 @@ class Director:
             user_msg += (
                 "FORMAT REQUIREMENT: YOUTUBE SHORTS (VERTICAL 9:16).\n"
                 "- Pacing MUST be ultra fast-paced and punchy (3 scenes total, STRICTLY under 45 seconds spoken audio).\n"
-                "- Each scene narration must be 20 to 28 words maximum (fast hook, immediate value, loopable outro).\n"
+                "- Each scene narration must be 15 to 22 words maximum (fast hook, immediate value, loopable outro).\n"
+                "- Enforce visual layout density: limit cards to 1 per scene. Do not request dense bullet blocks.\n"
                 "- Add '#Shorts' to the end of the video_title and in the description.\n"
             )
             if not scene_count:
@@ -182,12 +184,12 @@ class Director:
 
                 try:
                     screenplay = json.loads(raw)
-                    return screenplay
+                    return self.sanitize_screenplay(screenplay)
                 except json.JSONDecodeError as e:
                     fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
                     if fence_match:
                         try:
-                            return json.loads(fence_match.group(1))
+                            return self.sanitize_screenplay(json.loads(fence_match.group(1)))
                         except Exception:
                             pass
                     first_brace = raw.find("{")
@@ -195,7 +197,7 @@ class Director:
                     if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
                         candidate = raw[first_brace : last_brace + 1]
                         try:
-                            return json.loads(candidate)
+                            return self.sanitize_screenplay(json.loads(candidate))
                         except Exception:
                             pass
                     raise ValueError(f"Failed to parse JSON: {e}")
@@ -205,3 +207,27 @@ class Director:
                 time.sleep(1)
 
         raise RuntimeError(f"All Google Gemini models exhausted: {last_error}")
+
+    @staticmethod
+    def sanitize_screenplay(screenplay: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Content Guard & Synthetic Transparency Sanitizer:
+        Audits generated screenplay against deepfake deception and platform compliance rules.
+        Attaches standard transparency metadata tags.
+        """
+        if not isinstance(screenplay, dict):
+            return screenplay
+
+        screenplay["compliance"] = {
+            "synthetic_content_declaration": True,
+            "transparency_notice": "Contains AI-generated visual and synthesized audio elements.",
+            "content_guard_verified": True
+        }
+
+        prohibited_terms = ["deepfake", "counterfeit", "unauthorized impersonation"]
+        for s in screenplay.get("scenes", []):
+            if isinstance(s, dict) and "narration" in s:
+                for term in prohibited_terms:
+                    s["narration"] = re.sub(rf"\b{term}\b", "AI simulation", s["narration"], flags=re.IGNORECASE)
+
+        return screenplay

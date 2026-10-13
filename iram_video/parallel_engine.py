@@ -1,7 +1,7 @@
 """
 Asynchronous & Parallel Video Rendering Pipeline for IRAM Video.
-Orchestrates concurrent TTS audio synthesis, parallel visual asset generation,
-and speculative multi-worker compilation across background thread workers.
+Orchestrates synchronized sequential TTS audio layout alignment, followed by
+speculative multi-worker visual asset compilation across thread boundaries.
 """
 
 import sys
@@ -19,11 +19,11 @@ logger = logging.getLogger("iram_video.parallel")
 
 class ParallelPipelineEngine:
     """
-    Executes screenplay asset generation concurrently:
-    1. Fires TTS voiceover synthesis immediately in a background worker.
-    2. Concurrently launches parallel visual asset workers (B-roll, Generative, Motion Canvas).
-    3. Concurrently synthesizes soundtrack and soundscapes.
-    4. Merges synchronized tracks as soon as both audio and visuals settle.
+    Executes screenplay asset generation concurrently with strict timeline safety:
+    1. Synthesizes voiceover (TTS) tracks first to lock down micro-second timeline lengths.
+    2. Maps accurate audio time arrays down into the visual layout parameters.
+    3. Concurrently launches parallel visual asset workers (B-roll, Generative, Motion Canvas).
+    4. Merges synchronized tracks cleanly as soon as visual frames finalize.
     """
 
     def __init__(self, max_workers: int = 4):
@@ -41,8 +41,7 @@ class ParallelPipelineEngine:
         progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None
     ) -> Dict[str, Any]:
         """
-        Executes TTS synthesis and visual synthesis concurrently.
-        Returns dictionary with synthesized scenes, visual assets, and music path.
+        Executes timeline alignment and visual synthesis with absolute asset synchronization.
         """
         start_time = time.time()
         total_scenes = len(scenes)
@@ -50,11 +49,14 @@ class ParallelPipelineEngine:
         if progress_callback:
             progress_callback("pipeline_start", {"total_scenes": total_scenes})
 
-        # 1. Fire Voiceover Synthesis Worker
+        # --- STAGE 1: LOCK DOWN ACCURATE TIMELINE METRICS ---
+        if progress_callback:
+            progress_callback("tts_start", {"info": "Synthesizing audio tracks to build layout matrices..."})
+            
         tts_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts_worker")
         tts_future = tts_executor.submit(voice_synth.synthesize, scenes, audio_dir)
 
-        # 2. Fire Background Music Worker (if requested)
+        # Concurrently synthesize soundtrack score while audio tracks build
         music_future = None
         if music_mood and music_mood != "none" and music_out_path:
             music_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="music_worker")
@@ -62,16 +64,34 @@ class ParallelPipelineEngine:
                 synthesize_mood_track, music_mood, music_duration, music_out_path
             )
 
-        # 3. Fire Parallel Visual Asset Workers
+        # Await the voice generation track metrics first to prevent visual downscaling fallbacks
+        try:
+            synthesized_scenes = tts_future.result()
+            if progress_callback:
+                progress_callback("tts_complete", {"scene_count": len(synthesized_scenes)})
+        except Exception as e:
+            logger.error(f"TTS synthesis worker failed to lock timeline variables: {e}")
+            raise e
+        finally:
+            tts_executor.shutdown(wait=True)
+
+        # --- STAGE 2: PARALLEL HIGH-DPI VISUAL COMPILATION ---
         visual_results: Dict[int, Any] = {}
         visual_executor = ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="visual_worker")
         visual_futures = {}
 
-        for idx, sc in enumerate(scenes):
+        for idx, sc in enumerate(synthesized_scenes):
+            # Read the true duration directly from the voice output track
+            actual_duration = sc.get("audio_duration") or sc.get("duration") or 5.0
+            
+            # Map the true duration safely into the visual rendering schema parameters
+            sc["duration"] = actual_duration
+            
+            # Fire the high-DPI visual worker with exact asset parameters
             f = visual_executor.submit(visual_renderer_fn, sc, idx)
             visual_futures[f] = idx
 
-        # Await visual asset completion as they finish
+        # Gather parallel frames as they complete
         for f in as_completed(visual_futures):
             idx = visual_futures[f]
             try:
@@ -94,18 +114,7 @@ class ParallelPipelineEngine:
 
         visual_executor.shutdown(wait=True)
 
-        # Await TTS synthesis
-        try:
-            synthesized_scenes = tts_future.result()
-            if progress_callback:
-                progress_callback("tts_complete", {"scene_count": len(synthesized_scenes)})
-        except Exception as e:
-            logger.error(f"TTS synthesis worker failed: {e}")
-            raise e
-        finally:
-            tts_executor.shutdown(wait=True)
-
-        # Await Music generation
+        # Complete final score background operations
         music_ready = False
         if music_future:
             try:
@@ -114,7 +123,7 @@ class ParallelPipelineEngine:
                 if progress_callback:
                     progress_callback("music_ready", {"path": str(music_out_path)})
             except Exception as e:
-                logger.warning(f"Background music generation failed: {e}")
+                logger.warning(f"Background music score composition failed: {e}")
             finally:
                 music_executor.shutdown(wait=True)
 

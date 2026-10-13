@@ -177,6 +177,11 @@ class MCPServer:
         elif tool_name == "search_stock_broll":
             query = args["query"]
             orientation = args.get("orientation", "landscape")
+
+            # Explicitly intercept vertical flags to shield the layout canvas from landscape assets
+            if args.get("is_shorts") or args.get("aspect_ratio") == "9:16":
+                orientation = "portrait"
+
             req_vid = args.get("require_video", True)
             results = MediaFetcher.search_pexels(query, require_video=req_vid, orientation=orientation)
             if not results:
@@ -215,11 +220,16 @@ class MCPServer:
             prompt = args["prompt"]
             out_p = Path(args.get("output_path", "/tmp/mcp_generated_video.mp4")).resolve()
             cmd = [sys.executable, "-m", "iram_video.cli", "-o", str(out_p)]
+
+            is_shorts_flag = bool(args.get("is_shorts", False))
+            target_aspect = "9:16" if is_shorts_flag else args.get("aspect_ratio", "16:9")
+
             if args.get("template"):
                 cmd.extend(["--template", args["template"]])
-            if args.get("aspect_ratio"):
-                cmd.extend(["--aspect-ratio", args["aspect_ratio"]])
-            if args.get("is_shorts"):
+
+            cmd.extend(["--aspect-ratio", target_aspect])
+
+            if is_shorts_flag:
                 cmd.append("--shorts")
             if args.get("is_real", True):
                 cmd.append("--real")

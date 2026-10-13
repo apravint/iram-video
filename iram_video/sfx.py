@@ -6,10 +6,21 @@ from pathlib import Path
 SR = 44100
 
 class SoundEffectsSynthesizer:
-    """Procedural synthesis of Hollywood-grade cinema sound effects (SFX) and Foley."""
+    """Procedural synthesis of Hollywood-grade cinema sound effects (SFX) and Foley in stereo."""
 
     @staticmethod
-    def generate_impact(out_path: Path, duration: float = 2.5):
+    def _write_wav(out_path: Path, mono_signal: np.ndarray):
+        """Converts floating-point mono audio array into standard 16-bit dual-channel stereo WAV."""
+        audio_int16 = (np.clip(mono_signal, -1.0, 1.0) * 32767).astype(np.int16)
+        stereo_signal = np.stack((audio_int16, audio_int16), axis=-1)
+        with wave.open(str(out_path), "w") as wf:
+            wf.setnchannels(2)  # Stereo Configuration Channel
+            wf.setsampwidth(2)  # 16-bit depth
+            wf.setframerate(SR)  # 44100 Hz
+            wf.writeframes(stereo_signal.tobytes())
+
+    @classmethod
+    def generate_impact(cls, out_path: Path, duration: float = 2.5):
         """Heavy cinematic sub-bass impact drop (808 / theatrical hit)."""
         t = np.linspace(0, duration, int(SR * duration), endpoint=False)
         # Pitch sweep from 140 Hz down to 36 Hz with exponential decay
@@ -21,17 +32,11 @@ class SoundEffectsSynthesizer:
         rumble = np.sin(2 * np.pi * 32.0 * t) * np.exp(-t * 1.2) * 0.4
         
         hit = transient * 0.6 + sub * 0.8 + rumble
-        hit = np.tanh(hit * 1.8) * 0.85
-        
-        audio_int16 = (hit * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        hit = np.tanh(hit * 1.8) * 0.70
+        cls._write_wav(out_path, hit)
 
-    @staticmethod
-    def generate_whoosh(out_path: Path, duration: float = 1.2):
+    @classmethod
+    def generate_whoosh(cls, out_path: Path, duration: float = 1.2):
         """Cinematic whoosh / camera sweep transition."""
         t = np.linspace(0, duration, int(SR * duration), endpoint=False)
         # Bandpassed noise with frequency sweep
@@ -45,17 +50,11 @@ class SoundEffectsSynthesizer:
         carrier = np.sin(phase)
         
         whoosh = (white * 0.6 + carrier * 0.4) * env
-        whoosh = np.tanh(whoosh * 1.5) * 0.7
-        
-        audio_int16 = (whoosh * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        whoosh = np.tanh(whoosh * 1.5) * 0.70
+        cls._write_wav(out_path, whoosh)
 
-    @staticmethod
-    def generate_telemetry(out_path: Path, duration: float = 2.0):
+    @classmethod
+    def generate_telemetry(cls, out_path: Path, duration: float = 2.0):
         """Sci-Fi quantum computer telemetry / processing beeps."""
         t = np.linspace(0, duration, int(SR * duration), endpoint=False)
         mix = np.zeros_like(t)
@@ -69,57 +68,37 @@ class SoundEffectsSynthesizer:
             bt = t[b_mask] - blip_t
             mix[b_mask] += np.sin(2 * np.pi * b_freq * bt) * np.exp(-bt * 55.0) * 0.35
             
-        audio_int16 = (mix * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        cls._write_wav(out_path, mix * 0.70)
 
-    @staticmethod
-    def generate_ding(out_path: Path, duration: float = 0.4):
+    @classmethod
+    def generate_ding(cls, out_path: Path, duration: float = 0.4):
         """Short 880Hz chime with exponential decay (ported from Automated-Video-Generator)."""
         t = np.linspace(0, duration, int(SR * duration), endpoint=False)
         envelope = np.exp(-t * 8.0)
         signal = np.sin(2 * np.pi * 880.0 * t) * envelope * 0.45
-        audio_int16 = (signal * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        cls._write_wav(out_path, signal * 0.70)
 
-    @staticmethod
-    def generate_click(out_path: Path, duration: float = 0.05):
+    @classmethod
+    def generate_click(cls, out_path: Path, duration: float = 0.05):
         """Crisp mechanical impulse click."""
         t = np.linspace(0, duration, int(SR * duration), endpoint=False)
         noise = np.random.normal(0, 0.4, len(t))
         envelope = np.exp(-t * 120.0)
         signal = noise * envelope * 0.5
-        audio_int16 = (signal * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        cls._write_wav(out_path, signal * 0.70)
 
-    @staticmethod
-    def generate_pop(out_path: Path, duration: float = 0.08):
+    @classmethod
+    def generate_pop(cls, out_path: Path, duration: float = 0.08):
         """Short bubble pop."""
         t = np.linspace(0, duration, int(SR * duration), endpoint=False)
         freq = 320.0 + 400.0 * np.exp(-t * 45.0)
         phase = 2 * np.pi * np.cumsum(freq) / SR
         envelope = np.exp(-t * 35.0)
         signal = np.sin(phase) * envelope * 0.55
-        audio_int16 = (signal * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        cls._write_wav(out_path, signal * 0.70)
 
-    @staticmethod
-    def generate_notification(out_path: Path, duration: float = 0.3):
+    @classmethod
+    def generate_notification(cls, out_path: Path, duration: float = 0.3):
         """Two-tone UI chime: 440Hz followed by 880Hz."""
         half = duration / 2.0
         t1 = np.linspace(0, half, int(SR * half), endpoint=False)
@@ -127,15 +106,10 @@ class SoundEffectsSynthesizer:
         tone1 = np.sin(2 * np.pi * 440.0 * t1) * np.exp(-t1 * 10.0) * 0.4
         tone2 = np.sin(2 * np.pi * 880.0 * t2) * np.exp(-t2 * 8.0) * 0.45
         signal = np.concatenate([tone1, tone2])
-        audio_int16 = (signal * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        cls._write_wav(out_path, signal * 0.70)
 
-    @staticmethod
-    def generate_swish(out_path: Path, duration: float = 0.15):
+    @classmethod
+    def generate_swish(cls, out_path: Path, duration: float = 0.15):
         """Quick high-frequency sweep for code cards and animated list items."""
         t = np.linspace(0, duration, int(SR * duration), endpoint=False)
         carrier_freq = 400.0 + 1200.0 * (t / duration)
@@ -144,15 +118,10 @@ class SoundEffectsSynthesizer:
         noise = np.random.normal(0, 0.2, len(t))
         envelope = np.sin(np.pi * t / duration)
         signal = (carrier * 0.4 + noise * 0.25) * envelope * 0.5
-        audio_int16 = (signal * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        cls._write_wav(out_path, signal * 0.70)
 
-    @staticmethod
-    def generate_transition(out_path: Path, duration: float = 0.4):
+    @classmethod
+    def generate_transition(cls, out_path: Path, duration: float = 0.4):
         """Sweep + noise blend for scene transitions."""
         t = np.linspace(0, duration, int(SR * duration), endpoint=False)
         noise = np.random.normal(0, 0.25, len(t))
@@ -160,42 +129,27 @@ class SoundEffectsSynthesizer:
         phase = 2 * np.pi * np.cumsum(carrier_freq) / SR
         env = np.sin(np.pi * t / duration) ** 1.5
         signal = (noise * 0.4 + np.sin(phase) * 0.35) * env * 0.55
-        audio_int16 = (signal * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        cls._write_wav(out_path, signal * 0.70)
 
-    @staticmethod
-    def generate_bounce(out_path: Path, duration: float = 0.35):
+    @classmethod
+    def generate_bounce(cls, out_path: Path, duration: float = 0.35):
         """Rising two-tone bounce for positive reveals."""
         t = np.linspace(0, duration, int(SR * duration), endpoint=False)
         freq = 300.0 + 223.0 * (t / duration)
         phase = 2 * np.pi * np.cumsum(freq) / SR
         env = np.sin(np.pi * t / duration)
         signal = np.sin(phase) * env * 0.45
-        audio_int16 = (signal * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        cls._write_wav(out_path, signal * 0.70)
 
-    @staticmethod
-    def generate_riser(out_path: Path, duration: float = 1.5):
+    @classmethod
+    def generate_riser(cls, out_path: Path, duration: float = 1.5):
         """Ascending frequency riser for tension building."""
         t = np.linspace(0, duration, int(SR * duration), endpoint=False)
         freq = 80.0 + 1200.0 * (t / duration) ** 2
         phase = 2 * np.pi * np.cumsum(freq) / SR
         env = (t / duration) ** 1.2
         signal = np.sin(phase) * env * 0.5
-        audio_int16 = (signal * 32767).astype(np.int16)
-        with wave.open(str(out_path), "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SR)
-            wf.writeframes(audio_int16.tobytes())
+        cls._write_wav(out_path, signal * 0.70)
 
     @classmethod
     def generate_sfx(cls, kind: str, out_path: Path, duration: float = None) -> Path:
@@ -227,4 +181,3 @@ class SoundEffectsSynthesizer:
         dur = duration if duration is not None else def_dur
         func(out_path, duration=dur)
         return out_path
-

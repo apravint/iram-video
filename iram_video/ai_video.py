@@ -445,14 +445,14 @@ class AIVideoEngine:
                 return res_img
 
         # Tier 7: Public Domain Stock Archives (Wikimedia Commons, Openverse, Coverr, NASA HD Video/Photos)
-        stock_path = MediaFetcher.fetch_media_for_beat(query, out_dir, beat_id, global_topic=global_topic, is_shorts=is_shorts)
+        stock_path = MediaFetcher.fetch_media_for_beat(query, out_dir, beat_id, global_topic=global_topic, is_shorts=is_shorts, beat_data=beat)
         if stock_path.exists() and stock_path.stat().st_size > 5000:
             return stock_path
 
         # Tier 8: Documentary Motion Canvas Fallback
         fallback_img = out_dir / f"beat_{beat_id}.jpg"
         if not fallback_img.exists():
-            MediaFetcher.create_clean_documentary_frame(query, fallback_img, is_shorts=is_shorts)
+            MediaFetcher.create_clean_documentary_frame(query, fallback_img, beat_data=beat, is_shorts=is_shorts)
         return fallback_img
 
     @classmethod
@@ -499,16 +499,25 @@ class AIVideoEngine:
         res_ext = cls.fetch_or_generate_beat_media(beat, tmp_dir, "ext", is_shorts=is_shorts)
 
         # If res_ext is an image, convert to video with subtle steady motion
+        d_frames = int(duration * 30)
+        ctx_is_4k = "4k" in str(out_path.name).lower() or "uhd" in str(out_path.name).lower() or str(beat.get("is_4k", "false")).lower() in ["true", "1"]
+        if is_shorts:
+            w, h = (2160, 3840) if ctx_is_4k else (1080, 1920)
+        else:
+            w, h = (3840, 2160) if ctx_is_4k else (1920, 1080)
+
+        BT709_ARGS = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
+
         if res_ext.suffix.lower() in [".png", ".jpg", ".jpeg"]:
-            d_frames = int(duration * 30)
-            w, h = (1080, 1920) if is_shorts else (1920, 1080)
             fc = f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},zoompan=z='1.0+0.02*(on/{d_frames})':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps=30[v]"
             cmd_img2vid = [
                 "ffmpeg", "-y",
                 "-loop", "1", "-i", str(res_ext),
                 "-filter_complex", fc,
                 "-map", "[v]",
-                "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+                "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-tune", "animation",
+                *BT709_ARGS,
+                "-pix_fmt", "yuv420p",
                 "-t", f"{duration:.3f}",
                 str(ext_clip_path)
             ]
@@ -526,9 +535,17 @@ class AIVideoEngine:
             "ffmpeg", "-y",
             "-f", "concat", "-safe", "0",
             "-i", str(concat_txt),
-            "-c:v", "libx264", "-preset", "veryfast",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-tune", "film",
+            *BT709_ARGS,
             "-pix_fmt", "yuv420p",
             str(out_path)
         ]
         subprocess.run(cmd_cat, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        try:
+            if last_frame_path.exists(): last_frame_path.unlink()
+            if concat_txt.exists(): concat_txt.unlink()
+        except Exception:
+            pass
+
         return out_path

@@ -175,7 +175,7 @@ class SoundscapeMixer:
             mix_sources.append(f"[amb_{a_idx}]")
 
         fc_parts.append(
-            f"{''.join(mix_sources)}amix=inputs={len(mix_sources)}:duration=first:dropout_transition=2[outa]"
+            f"{''.join(mix_sources)}amix=inputs={len(mix_sources)}:duration=first:dropout_transition=2,loudnorm=I=-14:LRA=7:TP=-1.5[outa]"
         )
 
         filter_graph = ";".join(fc_parts)

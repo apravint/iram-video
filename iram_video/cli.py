@@ -190,21 +190,17 @@ def main():
         lang = "en"
 
     # Template resolution
+    # Template resolution
     selected_template = args.template
-    if args.tutorial:
-        selected_template = "tutorial"
-    elif args.listicle:
-        selected_template = "listicle"
-    elif args.comparison:
-        selected_template = "comparison"
-    elif args.news:
-        selected_template = "news"
-    elif args.promo:
-        selected_template = "promo"
-    elif args.explainer:
-        selected_template = "explainer"
-    elif args.podcast:
-        selected_template = "podcast"
+    # HIGH QUALITY COMPACT MAPPING: Parse template keys using an evaluation tuple map
+    for flag_attr, key_name in [
+        ("tutorial", "tutorial"), ("listicle", "listicle"), 
+        ("comparison", "comparison"), ("news", "news"), 
+        ("promo", "promo"), ("explainer", "explainer"), ("podcast", "podcast")
+    ]:
+        if getattr(args, flag_attr, False):
+            selected_template = key_name
+            break
 
     if selected_template:
         t_spec = get_template(selected_template)

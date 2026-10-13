@@ -233,24 +233,24 @@ class SlideRenderer:
     # --- VERTICAL YOUTUBE SHORTS (9:16) LAYOUT ---
     def _render_vertical_shorts(self, img: Image.Image, scene: Dict[str, Any], heading: str, subheading: str):
         draw = ImageDraw.Draw(img)
-        fta_h, fen_h = get_fonts(42, bold=True)
-        fta_sub, fen_sub = get_fonts(22, bold=False)
+        fta_h, fen_h = get_fonts(64, bold=True)
+        fta_sub, fen_sub = get_fonts(34, bold=False)
 
         draw_mixed_line(draw, 60, 110, heading[:48], (255, 255, 255), fta_h, fen_h)
         wrapped_sub = wrap_text(subheading, fta_sub, fen_sub, 960, draw)
-        sy = 175
+        sy = 195
         for s in wrapped_sub[:2]:
             draw_mixed_line(draw, 60, sy, s, self.accent_color, fta_sub, fen_sub)
-            sy += 30
+            sy += 44
 
         cards = scene.get("cards", [])
         card_w = 960
-        start_y = 260
+        start_y = 290
 
         if len(cards) <= 1:
             # Single prominent card + Interactive Terminal Simulation Window
             card = cards[0] if cards else {}
-            card_h = 400
+            card_h = 420
             col = self.accent_color
             ib = self.draw_card_frame(img, (60, start_y, 60 + card_w, start_y + card_h), card.get("title", ""), card.get("subtitle", ""), border_color=col)
             cdraw = ImageDraw.Draw(img)
@@ -258,18 +258,18 @@ class SlideRenderer:
             badge = card.get("badge")
             by = ib[1]
             if badge:
-                fta_b, fen_b = get_fonts(16, bold=True)
-                cdraw.rectangle((ib[0], by, ib[0] + 180, by + 34), fill=(25, 38, 60), outline=col, width=1)
-                draw_mixed_line(cdraw, ib[0] + 12, by + 6, badge, col, fta_b, fen_b)
-                by += 46
+                fta_b, fen_b = get_fonts(28, bold=True)
+                cdraw.rectangle((ib[0], by, ib[0] + 200, by + 44), fill=(25, 38, 60), outline=col, width=1)
+                draw_mixed_line(cdraw, ib[0] + 16, by + 8, badge, col, fta_b, fen_b)
+                by += 58
 
-            fta_bullet, fen_bullet = get_fonts(18, bold=False)
-            for bullet in card.get("bullets", [])[:3]:
+            fta_bullet, fen_bullet = get_fonts(26, bold=False)
+            for bullet in card.get("bullets", [])[:2]:
                 wrapped = wrap_text(bullet, fta_bullet, fen_bullet, card_w - 40, cdraw)
                 for w in wrapped:
                     draw_mixed_line(cdraw, ib[0], by, f"⚡ {w}", (190, 215, 240), fta_bullet, fen_bullet)
-                    by += 28
-                by += 10
+                    by += 36
+                by += 16
 
             # Terminal / Code Simulation Box in Lower-Middle Area
             term_y = start_y + card_h + 35
@@ -283,7 +283,7 @@ class SlideRenderer:
             draw.ellipse([(108, term_y + 14), (124, term_y + 30)], fill=(148, 163, 184))
             draw.ellipse([(136, term_y + 14), (152, term_y + 30)], fill=(203, 213, 225))
 
-            fta_tt, fen_tt = get_fonts(15, bold=True)
+            fta_tt, fen_tt = get_fonts(18, bold=True)
             draw_mixed_line(draw, 170, term_y + 12, "termux ~ bash (Android Linux)", (148, 163, 184), fta_tt, fen_tt)
 
             # Realistic CLI commands based on scene
@@ -316,17 +316,17 @@ class SlideRenderer:
                     ("System load: 0.12, Memory: 64% used", (148, 163, 184))
                 ]
 
-            ty = term_y + 60
-            fta_cmd, fen_cmd = get_fonts(17, bold=False)
-            fta_cmd_b, fen_cmd_b = get_fonts(17, bold=True)
+            ty = term_y + 70
+            fta_cmd, fen_cmd = get_fonts(24, bold=False)
+            fta_cmd_b, fen_cmd_b = get_fonts(24, bold=True)
             for cmd_text, cmd_col in c_lines:
                 f_use = fen_cmd_b if cmd_text.startswith("$") else fen_cmd
                 draw_mixed_line(draw, 85, ty, cmd_text, cmd_col, fta_cmd, f_use)
-                ty += 34
+                ty += 40
         else:
-            num_cards = min(3, len(cards))
+            num_cards = min(2, len(cards))
             total_avail_h = 1000
-            gap = 25
+            gap = 35
             card_h = (total_avail_h - (num_cards - 1) * gap) // num_cards
 
             for i, card in enumerate(cards[:num_cards]):
@@ -338,18 +338,18 @@ class SlideRenderer:
                 badge = card.get("badge")
                 by = ib[1]
                 if badge:
-                    fta_b, fen_b = get_fonts(16, bold=True)
-                    cdraw.rectangle((ib[0], by, ib[0] + 160, by + 34), fill=(25, 38, 60), outline=col, width=1)
-                    draw_mixed_line(cdraw, ib[0] + 12, by + 6, badge, col, fta_b, fen_b)
-                    by += 46
+                    fta_b, fen_b = get_fonts(28, bold=True)
+                    cdraw.rectangle((ib[0], by, ib[0] + 200, by + 44), fill=(25, 38, 60), outline=col, width=1)
+                    draw_mixed_line(cdraw, ib[0] + 16, by + 8, badge, col, fta_b, fen_b)
+                    by += 58
 
-                fta_bullet, fen_bullet = get_fonts(18, bold=False)
-                for bullet in card.get("bullets", [])[:4]:
+                fta_bullet, fen_bullet = get_fonts(26, bold=False)
+                for bullet in card.get("bullets", [])[:2]:
                     wrapped = wrap_text(bullet, fta_bullet, fen_bullet, card_w - 40, cdraw)
                     for w in wrapped:
                         draw_mixed_line(cdraw, ib[0], by, f"⚡ {w}", (190, 215, 240), fta_bullet, fen_bullet)
-                        by += 28
-                    by += 10
+                        by += 36
+                    by += 16
 
     # --- LANDSCAPE 16:9 METHODS ---
     def _render_pillars(self, img: Image.Image, cards: List[Dict[str, Any]]):

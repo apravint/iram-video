@@ -80,6 +80,54 @@ class VoiceSynthesizer:
         except Exception:
             return 3.0
 
+    @staticmethod
+    def align_with_whisper(audio_file: Path, text: str = "") -> List[Dict[str, Any]]:
+        """
+        Attempts acoustic word-level alignment using Whisper / WhisperX / faster-whisper.
+        Returns a word-level timestamp matrix: [{'word': str, 'start': float, 'end': float, 'duration': float}].
+        Falls back gracefully if libraries or models are not installed.
+        """
+        # 1. Try faster_whisper
+        try:
+            from faster_whisper import WhisperModel
+            model = WhisperModel("tiny", device="cpu", compute_type="int8")
+            segments, _ = model.transcribe(str(audio_file), word_timestamps=True)
+            words = []
+            for seg in segments:
+                if hasattr(seg, "words") and seg.words:
+                    for w in seg.words:
+                        words.append({
+                            "word": w.word.strip(),
+                            "start": round(float(w.start), 3),
+                            "end": round(float(w.end), 3),
+                            "duration": round(float(w.end - w.start), 3)
+                        })
+            if words:
+                return words
+        except Exception:
+            pass
+
+        # 2. Try standard openai whisper
+        try:
+            import whisper
+            model = whisper.load_model("tiny")
+            result = model.transcribe(str(audio_file), word_timestamps=True)
+            words = []
+            for seg in result.get("segments", []):
+                for w in seg.get("words", []):
+                    words.append({
+                        "word": w["word"].strip(),
+                        "start": round(float(w["start"]), 3),
+                        "end": round(float(w["end"]), 3),
+                        "duration": round(float(w["end"] - w["start"]), 3)
+                    })
+            if words:
+                return words
+        except Exception:
+            pass
+
+        return []
+
     async def _generate_single(self, scene: Dict[str, Any], output_dir: Path) -> Dict[str, Any]:
         sid = scene["id"]
         out_mp3 = output_dir / f"{sid}.mp3"
@@ -146,6 +194,11 @@ class VoiceSynthesizer:
                 print(f"[Notice] Silent audio fallback error for scene '{sid}': {e}")
 
         dur = self.get_duration(out_mp3)
+        if not word_timings:
+            whisper_timings = self.align_with_whisper(out_mp3, scene["narration"])
+            if whisper_timings:
+                word_timings = whisper_timings
+
         scene["audio_file"] = str(out_mp3.resolve())
         scene["duration"] = dur
         scene["word_timings"] = word_timings

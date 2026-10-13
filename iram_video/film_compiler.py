@@ -160,7 +160,7 @@ class FilmCompiler:
             fc = (
                 f"[0:v]zoompan=z='min(zoom+0.0002,1.025)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
                 f"{sprite_chain};"
-                f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=11:allf=t+u[vfinal];"
+                f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=3:allf=g[vfinal];"
                 f"[2:a]bass=g=3:f=110,equalizer=f=3200:t=q:w=1:g=2[a_speech];"
                 f"[3:a]volume={sfx_vol}[a_sfx];"
                 f"[a_speech][a_sfx]amix=inputs=2:duration=first:dropout_transition=2[afinal]"
@@ -174,8 +174,8 @@ class FilmCompiler:
                 "-filter_complex", fc,
                 "-map", "[vfinal]",
                 "-map", "[afinal]",
-                "-c:v", "libx264", "-preset", "veryfast",
-                "-c:a", "aac", "-b:a", "192k",
+                "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-tune", "animation",
+                "-c:a", "aac", "-b:a", "320k",
                 "-pix_fmt", "yuv420p",
                 "-t", f"{duration:.3f}",
                 str(out_shot)
@@ -184,7 +184,7 @@ class FilmCompiler:
             fc = (
                 f"[0:v]zoompan=z='min(zoom+0.0002,1.025)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
                 f"{sprite_chain};"
-                f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=11:allf=t+u[vfinal]"
+                f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=3:allf=g[vfinal]"
             )
             cmd = [
                 "ffmpeg", "-y",
@@ -195,8 +195,8 @@ class FilmCompiler:
                 "-map", "[vfinal]",
                 "-map", "2:a",
                 "-af", "bass=g=3:f=110,equalizer=f=3200:t=q:w=1:g=2",
-                "-c:v", "libx264", "-preset", "veryfast",
-                "-c:a", "aac", "-b:a", "192k",
+                "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-tune", "animation",
+                "-c:a", "aac", "-b:a", "320k",
                 "-pix_fmt", "yuv420p",
                 "-t", f"{duration:.3f}",
                 str(out_shot)
@@ -348,7 +348,7 @@ class FilmCompiler:
         fc = (
             "[1:a]volume=0.28[score];"
             "[score][0:a]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
-            "[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+            "[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=2,loudnorm=I=-14:LRA=7:TP=-1.5[aout]"
         )
         cmd_master = [
             "ffmpeg", "-y",
@@ -357,9 +357,10 @@ class FilmCompiler:
             "-filter_complex", fc,
             "-map", "0:v",
             "-map", "[aout]",
-            "-c:v", "copy",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-tune", "film",
             "-c:a", "aac",
-            "-b:a", "256k",
+            "-b:a", "320k", # Ensure high-fidelity audio bitrate capacity
+            "-ac", "2",     # Pin final compilation tracks to dual-channel stereo
             "-movflags", "+faststart",
             str(output_path)
         ]

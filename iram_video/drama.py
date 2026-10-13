@@ -5,6 +5,7 @@ Manages multi-scene character identity consistency, dramatic tension curves,
 and agentic storyboarding across episodic drama and animated narratives.
 """
 
+import threading
 from typing import Dict, Any, List, Optional
 from .character_memory import CharacterVectorMemory
 
@@ -14,6 +15,7 @@ class CharacterAnchorRegistry:
     def __init__(self, memory: Optional[CharacterVectorMemory] = None):
         self._characters: Dict[str, Dict[str, str]] = {}
         self.memory = memory or CharacterVectorMemory()
+        self._lock = threading.Lock()  # Protect Qdrant socket writes
 
     def register_character(
         self,
@@ -26,30 +28,34 @@ class CharacterAnchorRegistry:
         episode: int = 1,
         seed: int = 42
     ) -> Dict[str, str]:
+        clean_app = " ".join(str(appearance).replace("\n", " ").split())
+        clean_ward = " ".join(str(wardrobe).replace("\n", " ").split())
+
         key = name.lower().strip()
         anchor = {
             "name": name,
             "role": role,
-            "appearance": appearance,
-            "wardrobe": wardrobe,
+            "appearance": clean_app,
+            "wardrobe": clean_ward,
             "voice_id": voice_id,
             "traits": ", ".join(traits or []),
-            "prompt_token": f"{appearance}, wearing {wardrobe}"
+            "prompt_token": f"{clean_app[:80]}, wearing {clean_ward[:80]}"
         }
         self._characters[key] = anchor
 
-        # Persist into Qdrant Vector DB for multi-day / multi-episode continuity
-        try:
-            self.memory.store_character_anchor(
-                character_name=name,
-                wardrobe=wardrobe,
-                facial_features=appearance,
-                style_signature=anchor["prompt_token"],
-                episode=episode,
-                seed=seed
-            )
-        except Exception:
-            pass
+        # Persist into Qdrant Vector DB for multi-day / multi-episode continuity with threading lock
+        with self._lock:
+            try:
+                self.memory.store_character_anchor(
+                    character_name=name,
+                    wardrobe=clean_ward,
+                    facial_features=clean_app,
+                    style_signature=anchor["prompt_token"],
+                    episode=episode,
+                    seed=seed
+                )
+            except Exception:
+                pass
 
         return anchor
 
@@ -58,10 +64,14 @@ class CharacterAnchorRegistry:
         if key in self._characters:
             return self._characters[key]["prompt_token"]
 
-        # Check Qdrant Vector DB for historical actor anchor
-        hist = self.memory.find_consistent_anchor(character_name)
-        if hist and "style_signature" in hist:
-            return hist["style_signature"]
+        # Check Qdrant Vector DB for historical actor anchor with threading lock
+        with self._lock:
+            try:
+                hist = self.memory.find_consistent_anchor(character_name)
+                if hist and "style_signature" in hist:
+                    return hist["style_signature"]
+            except Exception:
+                pass
 
         return character_name
 

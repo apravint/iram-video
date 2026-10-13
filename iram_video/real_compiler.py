@@ -114,8 +114,8 @@ class RealVideoCompiler:
                 "-filter_complex", fc,
                 "-map", "[v]",
                 "-map", "1:a",
-                "-c:v", "libx264", "-preset", "veryfast",
-                "-c:a", "aac", "-b:a", "192k",
+                "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-tune", "film",
+                "-c:a", "aac", "-b:a", "320k",
                 *STANDARD_BT709_ARGS,
                 "-t", f"{duration:.3f}",
                 str(out_shot)
@@ -125,9 +125,9 @@ class RealVideoCompiler:
                 from PIL import Image
                 Image.MAX_IMAGE_PIXELS = 300_000_000
                 with Image.open(media_path) as im:
-                    if im.width > 2560 or im.height > 1440:
-                        im.thumbnail((2560, 1440), Image.Resampling.LANCZOS)
-                        im.convert("RGB").save(media_path, format="JPEG", quality=92)
+                    if im.width > 3840 or im.height > 2160:
+                        im.thumbnail((3840, 2160), Image.Resampling.LANCZOS)
+                        im.convert("RGB").save(media_path, format="JPEG", quality=100, subsampling=0)
             except Exception:
                 pass
 
@@ -153,8 +153,8 @@ class RealVideoCompiler:
                 "-filter_complex", fc,
                 "-map", "[v]",
                 "-map", "1:a",
-                "-c:v", "libx264", "-preset", "veryfast",
-                "-c:a", "aac", "-b:a", "192k",
+                "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-tune", "animation",
+                "-c:a", "aac", "-b:a", "320k",
                 *STANDARD_BT709_ARGS,
                 "-t", f"{duration:.3f}",
                 str(out_shot)
@@ -213,7 +213,7 @@ class RealVideoCompiler:
                 is_video = media_path.suffix.lower() in [".webm", ".mp4", ".mkv", ".mov"]
                 if is_video:
                     fc = f"[0:v]scale={self.w}:{self.h}:force_original_aspect_ratio=increase,crop={self.w}:{self.h},fps=30,setsar=1,format=yuv420p[v]"
-                    cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(media_path), "-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS, "-t", f"{b_dur:.3f}", "-an", str(beat_clip_path)]
+                    cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(media_path), "-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "medium", "-crf", "18", *STANDARD_BT709_ARGS, "-t", f"{b_dur:.3f}", "-an", str(beat_clip_path)]
                 else:
                     d_frames = int(b_dur * 30) + 15
                     sw, sh = ((int(self.w * 1.04) // 2) * 2, (int(self.h * 1.04) // 2) * 2)
@@ -226,7 +226,7 @@ class RealVideoCompiler:
                         f"fade=t=in:st=0:d=0.25,fade=t=out:st={max(0.1, b_dur-0.25):.2f}:d=0.25,"
                         f"format=yuv420p[v]"
                     )
-                    cmd = ["ffmpeg", "-y", "-loop", "1", "-i", str(media_path), "-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS, "-t", f"{b_dur:.3f}", "-an", str(beat_clip_path)]
+                    cmd = ["ffmpeg", "-y", "-loop", "1", "-i", str(media_path), "-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "medium", "-crf", "18", *STANDARD_BT709_ARGS, "-t", f"{b_dur:.3f}", "-an", str(beat_clip_path)]
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 beat_clips.append(beat_clip_path)
 
@@ -246,11 +246,10 @@ class RealVideoCompiler:
             duration = float(scene.get("duration", 4.0))
             audio_file = Path(scene["audio_file"])
             fallback_beat = {
-                "beat_type": "metric_card",
-                "metric_number": scene_idx + 1,
-                "metric_unit": "PART",
-                "metric_label_en": scene.get("heading", self.global_topic)[:30],
-                "phrase": scene.get("narration", "")[:80]
+                "beat_type": "real_media",
+                "query": scene.get("heading", self.global_topic),
+                "phrase": scene.get("narration", "")[:120],
+                "heading": scene.get("heading", self.global_topic)
             }
             return self._render_single_shot(fallback_beat, duration, audio_file, out_shot, scene_idx)
 
@@ -332,11 +331,11 @@ class RealVideoCompiler:
         if v_filters:
             filter_complex_list.append(f"[0:v]{','.join(v_filters)},setsar=1,format=yuv420p[vout]")
             maps.extend(["-map", "[vout]"])
-            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
+            video_codec_args = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-b:v", "15M", "-maxrate", "20M", "-bufsize", "30M", *STANDARD_BT709_ARGS]
         else:
             filter_complex_list.append("[0:v]setsar=1,format=yuv420p[vout]")
             maps.extend(["-map", "[vout]"])
-            video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", *STANDARD_BT709_ARGS]
+            video_codec_args = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-b:v", "15M", "-maxrate", "20M", "-bufsize", "30M", *STANDARD_BT709_ARGS]
         if soundscape_playlist and total_duration > 0:
             layered_soundscape_wav = self.work_dir / "soundscape_mixed_bg.wav"
             primary_amb = soundscape_playlist[0].get("type", "room_tone") if soundscape_playlist else "room_tone"
@@ -365,16 +364,17 @@ class RealVideoCompiler:
         if bg_music and bg_music.exists():
             vol_val = max(0.02, min(1.0, float(music_volume)))
             filter_complex_list.append(
-                f"[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[voice_master];"
+                f"[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5[voice_raw];"
+                f"[voice_raw]loudnorm=I=-15:TP=-1.5:LRA=9[voice_master];"
                 f"[1:a]lowpass=f=4000,volume={vol_val:.2f}[bg_clean];"
                 f"[bg_clean][voice_master]sidechaincompress=threshold=0.08:ratio=5:attack=80:release=380[ducked];"
-                f"[voice_master][ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+                f"[voice_master][ducked]amix=inputs=2:duration=first:dropout_transition=2,loudnorm=I=-14:LRA=7:TP=-1.5[aout]"
             )
             maps.extend(["-map", "[aout]"])
             audio_inputs = ["-i", str(bg_music)]
         else:
             filter_complex_list.append(
-                "[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-16:TP=-1.5:LRA=10[aout]"
+                "[0:a]highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=2.5,loudnorm=I=-14:LRA=7:TP=-1.5[aout]"
             )
             maps.extend(["-map", "[aout]"])
             audio_inputs = []
@@ -388,6 +388,7 @@ class RealVideoCompiler:
             *video_codec_args,
             "-c:a", "aac",
             "-b:a", "320k",
+            "-ac", "2",
             "-ar", "48000",
             "-movflags", "+faststart",
             str(output_path)

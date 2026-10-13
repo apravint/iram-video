@@ -65,7 +65,13 @@ class TransitionEngine:
             raise ValueError("No video clips provided to transition engine.")
 
         if len(clip_paths) == 1:
-            cmd = ["ffmpeg", "-y", "-i", str(clip_paths[0]), "-vf", "setsar=1", "-c:v", "libx264", "-preset", "veryfast", "-c:a", "copy", str(output_path)]
+            # FIX: Set to medium, drop CRF to 16, and use animation tuning to lock text vectors
+            cmd = [
+                "ffmpeg", "-y", "-i", str(clip_paths[0]), 
+                "-vf", "setsar=1", 
+                "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-tune", "animation",
+                "-c:a", "copy", str(output_path)
+            ]
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return output_path
 
@@ -127,8 +133,8 @@ class TransitionEngine:
                 "-map", "[v_master]",
                 "-map", "[a_master]",
                 "-c:v", "libx264",
-                "-preset", "veryfast",
-                "-crf", "18",
+                "-preset", "medium",
+                "-crf", "16",
                 "-pix_fmt", "yuv420p",
                 "-colorspace", "bt709",
                 "-color_primaries", "bt709",
@@ -136,7 +142,8 @@ class TransitionEngine:
                 "-color_range", "tv",
                 "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709",
                 "-c:a", "aac",
-                "-b:a", "192k",
+                "-b:a", "320k", # HIGH QUALITY FIX: Maintain 320k audio capacity matching mastering profiles
+                "-ac", "2",     # Strictly enforce dual-channel stereo stream copy bounds
                 str(output_path)
             ]
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
