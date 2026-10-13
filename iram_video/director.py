@@ -206,7 +206,238 @@ class Director:
                 last_error = e
                 time.sleep(1)
 
-        raise RuntimeError(f"All Google Gemini models exhausted: {last_error}")
+        print(f"⚠️ [Director] External Google Gemini quota exhausted ({last_error}). Directing offline procedural screenplay...")
+        return self.generate_procedural_screenplay(
+            prompt,
+            scene_count=scene_count or 3,
+            style_hint=style_hint,
+            language=language,
+            is_shorts=is_shorts,
+            is_cinema=is_cinema,
+            is_real=is_real,
+            character=character,
+            template=template
+        )
+
+    def generate_procedural_screenplay(
+        self,
+        prompt: str,
+        scene_count: int = 3,
+        style_hint: str = None,
+        language: str = "en",
+        is_shorts: bool = False,
+        is_cinema: bool = False,
+        is_real: bool = True,
+        character: str = None,
+        template: str = None
+    ) -> Dict[str, Any]:
+        """
+        Deterministic, Broadcast-Grade Procedural Screenplay Generator.
+        Activates when external LLM API rate limits (429/503) are hit.
+        Crafts high-impact three-act narrative screenplays with verified cinematography b-roll beats.
+        """
+        clean_prompt = prompt.strip()
+        is_ta = language.lower() in ["ta", "tamil"]
+
+        # 1. Cinema / Hollywood Movie Trailer
+        if is_cinema:
+            title = f"{clean_prompt[:45].upper()} | Official Trailer"
+            scenes = [
+                {
+                    "id": "scene_01",
+                    "heading": "ACT I: THE FRACTURE",
+                    "subheading": "An anomaly breaches the event horizon",
+                    "layout_type": "hero_metric",
+                    "cards": [{"title": "THREAT DETECTED", "bullets": ["Perimeter Breached", "Zero Tolerance"]}],
+                    "narration": "In a universe governed by unbreakable laws, one fracture changes everything. When the threshold is crossed, tomorrow is no longer guaranteed.",
+                    "broll_beats": [
+                        {"phrase": "In a universe governed by unbreakable laws", "search_query": "deep space nebula cosmic event", "ai_prompt": "Cinematic 8k nebula swirling galaxy stars", "camera": "zoom_in"},
+                        {"phrase": "one fracture changes everything", "search_query": "futuristic city skyline dark stormy night lightning", "ai_prompt": "Cyberpunk metropolis lightning storm rain", "camera": "pan_right"},
+                        {"phrase": "tomorrow is no longer guaranteed", "search_query": "lone operative walking dark sci-fi corridor smoke", "ai_prompt": "Soldier silhouette walking smoky tunnel cinematic lighting", "camera": "zoom_in"}
+                    ]
+                },
+                {
+                    "id": "scene_02",
+                    "heading": "ACT II: THE CONVERGENCE",
+                    "subheading": "The mission to prevent the inevitable collapse",
+                    "layout_type": "hero_metric",
+                    "cards": [{"title": "SINGULARITY PROTOCOL", "bullets": ["Critical Trajectory", "Override Core"]}],
+                    "narration": "As reality unravels at the speed of light, one operative must breach the singularity. No backup. No extraction. Only the mission.",
+                    "broll_beats": [
+                        {"phrase": "As reality unravels at the speed of light", "search_query": "massive particle accelerator glowing core", "ai_prompt": "Glowing reactor core humming energy beams", "camera": "zoom_in"},
+                        {"phrase": "one operative must breach the singularity", "search_query": "fighter jet breaking sound barrier dawn sky", "ai_prompt": "Supersonic jet soaring above clouds sunset", "camera": "pan_left"},
+                        {"phrase": "Only the mission", "search_query": "operative aiming weapon night rain reflection", "ai_prompt": "Dramatic slow motion rain drops warrior determined eyes", "camera": "zoom_out"}
+                    ]
+                },
+                {
+                    "id": "scene_03",
+                    "heading": "ACT III: TIME REBORN",
+                    "subheading": "The final stand beyond the horizon",
+                    "layout_type": "hero_metric",
+                    "cards": [{"title": "FINAL RECKONING", "bullets": ["Singularity Reached", "Dawn Beckons"]}],
+                    "narration": "To save the future, you must rewrite the beginning. This season, prepare to redefine reality itself.",
+                    "broll_beats": [
+                        {"phrase": "To save the future, you must rewrite the beginning", "search_query": "epic explosion supernova expanding shockwave", "ai_prompt": "Cosmic supernova shockwave golden fiery light", "camera": "zoom_out"},
+                        {"phrase": "This season prepare to redefine reality itself", "search_query": "mountain summit sunrise golden rays epic wide shot", "ai_prompt": "Breathtaking mountain peak sunrise golden hour 4k cinema", "camera": "zoom_in"}
+                    ]
+                }
+            ]
+            return self.sanitize_screenplay({
+                "video_title": title,
+                "theme_palette": {"bg": [8, 10, 20], "accent": [239, 68, 68], "secondary": [245, 158, 11], "card_bg": [17, 24, 39]},
+                "visual_policy": "Hollywood cinema widescreen scope 2.39:1, high drama, 35mm grain",
+                "soundscape": {"ambient_track": "server_room", "soundscape_playlist": [{"type": "server_room", "volume": 0.15}]},
+                "youtube_metadata": {
+                    "description": f"Official Cinema Trailer for {clean_prompt}. Experience the Hollywood sci-fi blockbuster journey.",
+                    "tags": ["HollywoodTrailer", "OfficialTrailer", "MovieTrailer", "SciFiCinema", "CinemaScope", "Blockbuster", "4KTrailer"]
+                },
+                "scenes": scenes
+            })
+
+        # 2. YouTube Shorts (9:16 Vertical)
+        if is_shorts:
+            title = f"{clean_prompt[:50]} #Shorts"
+            if is_ta:
+                scenes = [
+                    {
+                        "id": "scene_01",
+                        "heading": "முதல் அடி",
+                        "subheading": "தொடக்கம் தான் எல்லாம்",
+                        "layout_type": "hero_metric",
+                        "cards": [{"title": "இலக்கு", "bullets": ["துணிச்சல்", "தொடக்கம்"]}],
+                        "narration": "உன் இலக்கை நோக்கி ஓடுவதை ஒருபோதும் நிறுத்தாதே. ஒவ்வொரு வெற்றியும் ஒரு சிறிய முதல் அடியில்தான் தொடங்குகிறது.",
+                        "broll_beats": [
+                            {"phrase": "உன் இலக்கை நோக்கி ஓடுவதை ஒருபோதும் நிறுத்தாதே", "search_query": "athlete sprinting athletic track morning sunrise", "ai_prompt": "Sprinter athlete sprinting on track sunrise", "camera": "zoom_in"},
+                            {"phrase": "ஒவ்வொரு வெற்றியும் ஒரு சிறிய முதல் அடியில்தான் தொடங்குகிறது", "search_query": "running shoes pavement starting block close up", "ai_prompt": "Close up runner shoes starting block pavement", "camera": "pan_left"}
+                        ]
+                    },
+                    {
+                        "id": "scene_02",
+                        "heading": "விடாமுயற்சி",
+                        "subheading": "தடைகளை உடைத்தெறி",
+                        "layout_type": "hero_metric",
+                        "cards": [{"title": "உழைப்பு", "bullets": ["விடாமுயற்சி", "கவனம்"]}],
+                        "narration": "ஆயிரம் தோல்விகள் வந்தாலும் உன் கனவை கைவிடாதே. விடாமுயற்சி மட்டுமே உன்னை அடுத்த நிலைக்கு கொண்டு செல்லும்.",
+                        "broll_beats": [
+                            {"phrase": "ஆயிரம் தோல்விகள் வந்தாலும் உன் கனவை கைவிடாதே", "search_query": "boxer hitting heavy bag gym workout sweat", "ai_prompt": "Determined boxer training gym sweat cinematic lighting", "camera": "zoom_in"},
+                            {"phrase": "விடாமுயற்சி மட்டுமே உன்னை அடுத்த நிலைக்கு கொண்டு செல்லும்", "search_query": "rock climber gripping cliff steep mountain peak", "ai_prompt": "Rock climber hanging cliff edge determination", "camera": "zoom_out"}
+                        ]
+                    },
+                    {
+                        "id": "scene_03",
+                        "heading": "சிகரத்தை அடை",
+                        "subheading": "உன் வெற்றி உன் கையில்",
+                        "layout_type": "hero_metric",
+                        "cards": [{"title": "வெற்றி", "bullets": ["சிகரம்", "வெற்றி முழக்கம்"]}],
+                        "narration": "விடாமல் உழைப்பவனுக்கு உலகம் வழிவிடும். இன்றே உன் பயணத்தை தொடங்கு, சிகரம் உன் வசப்படும்.",
+                        "broll_beats": [
+                            {"phrase": "விடாமல் உழைப்பவனுக்கு உலகம் வழிவிடும்", "search_query": "runner raising arms finish line victory sunrise", "ai_prompt": "Marathon runner crossing finish line golden hour", "camera": "zoom_in"},
+                            {"phrase": "இன்றே உன் பயணத்தை தொடங்கு சிகரம் உன் வசப்படும்", "search_query": "mountain summit sunrise golden rays clouds panorama", "ai_prompt": "Panoramic mountain peak sunrise golden light epic view", "camera": "zoom_out"}
+                        ]
+                    }
+                ]
+            else:
+                scenes = [
+                    {
+                        "id": "scene_01",
+                        "heading": "THE TURNING POINT",
+                        "subheading": "Where most stop, the journey begins",
+                        "layout_type": "hero_metric",
+                        "cards": [{"title": "START NOW", "bullets": ["Take Action", "No Excuses"]}],
+                        "narration": f"The biggest mistake is waiting for the perfect moment. Take the first step now, because momentum beats hesitation every time.",
+                        "broll_beats": [
+                            {"phrase": "The biggest mistake is waiting for the perfect moment", "search_query": "running shoes pavement athlete morning sprint", "ai_prompt": "Runner stepping onto track dawn", "camera": "zoom_in"},
+                            {"phrase": "Take the first step now momentum beats hesitation", "search_query": "boxer workout speed bag training gym", "ai_prompt": "Boxer hitting bag intense focus", "camera": "pan_right"}
+                        ]
+                    },
+                    {
+                        "id": "scene_02",
+                        "heading": "RELENTLESS FOCUS",
+                        "subheading": "Discipline over motivation",
+                        "layout_type": "hero_metric",
+                        "cards": [{"title": "EXECUTION", "bullets": ["Daily Grind", "Pure Focus"]}],
+                        "narration": "Motivation gets you started, but ruthless discipline is what carries you through the fire when nobody is watching.",
+                        "broll_beats": [
+                            {"phrase": "Motivation gets you started but ruthless discipline", "search_query": "athlete barbell deadlift gym chalk dust", "ai_prompt": "Athlete lifting heavy barbell chalk smoke", "camera": "zoom_in"},
+                            {"phrase": "carries you through the fire when nobody is watching", "search_query": "cyclist climbing steep mountain road morning mist", "ai_prompt": "Cyclist pushing steep gradient mountain mist", "camera": "pan_left"}
+                        ]
+                    },
+                    {
+                        "id": "scene_03",
+                        "heading": "THE SUMMIT",
+                        "subheading": "Victory is forged in silence",
+                        "layout_type": "hero_metric",
+                        "cards": [{"title": "TRIUMPH", "bullets": ["Peak Achieved", "Unstoppable"]}],
+                        "narration": "Stay in the fight. The mountain is steep, but the view from the summit belongs only to those who refused to quit.",
+                        "broll_beats": [
+                            {"phrase": "Stay in the fight the mountain is steep", "search_query": "trail runner forest sunbeams mountain path", "ai_prompt": "Trail runner forest golden sunlight", "camera": "zoom_in"},
+                            {"phrase": "the view from the summit belongs only to those who refused to quit", "search_query": "mountain summit sunrise golden rays panorama", "ai_prompt": "Epic mountain peak sunrise clouds golden rays", "camera": "zoom_out"}
+                        ]
+                    }
+                ]
+            return self.sanitize_screenplay({
+                "video_title": title,
+                "theme_palette": {"bg": [15, 23, 42], "accent": [59, 130, 246], "secondary": [245, 158, 11], "card_bg": [30, 41, 59]},
+                "visual_policy": "Clean high-energy vertical 9:16 layout, zero clutter",
+                "soundscape": {"ambient_track": "subtle_wind", "soundscape_playlist": [{"type": "subtle_wind", "volume": 0.12}]},
+                "youtube_metadata": {
+                    "description": f"{clean_prompt}\n\n#Shorts #Motivation #Discipline #Success",
+                    "tags": ["Shorts", "Motivation", "Discipline", "Focus", "Success", "Mindset"]
+                },
+                "scenes": scenes
+            })
+
+        # 3. Universal Documentary / Explainer
+        title = f"{clean_prompt[:60]}"
+        scenes = [
+            {
+                "id": "scene_01",
+                "heading": "THE FOUNDATION",
+                "subheading": "Understanding the core architecture",
+                "layout_type": "hero_metric",
+                "cards": [{"title": "ORIGIN", "bullets": ["Core Concept", "First Principles"]}],
+                "narration": f"To truly master {clean_prompt[:40]}, we must first break down the underlying architecture that defines it from first principles.",
+                "broll_beats": [
+                    {"phrase": f"To truly master {clean_prompt[:40]}", "search_query": "datacenter server racks glowing blue led rows", "ai_prompt": "Futuristic datacenter corridors glowing cables", "camera": "zoom_in"},
+                    {"phrase": "we must first break down the underlying architecture", "search_query": "circuit board microchip close up glowing traces", "ai_prompt": "Microchip macro view electric currents", "camera": "pan_right"}
+                ]
+            },
+            {
+                "id": "scene_02",
+                "heading": "THE BREAKTHROUGH",
+                "subheading": "Overcoming the fundamental bottleneck",
+                "layout_type": "hero_metric",
+                "cards": [{"title": "INNOVATION", "bullets": ["Scale System", "Zero Latency"]}],
+                "narration": "Traditional systems falter under massive scale, but modern engineering turns complexity into seamless, high-throughput execution.",
+                "broll_beats": [
+                    {"phrase": "Traditional systems falter under massive scale", "search_query": "cyber network data stream nodes glowing connections", "ai_prompt": "Global fiber optic network planet earth night", "camera": "zoom_in"},
+                    {"phrase": "modern engineering turns complexity into seamless execution", "search_query": "software engineer typing multi monitor setup dark room", "ai_prompt": "Developer typing code dual monitors glowing desk", "camera": "pan_left"}
+                ]
+            },
+            {
+                "id": "scene_03",
+                "heading": "THE HORIZON",
+                "subheading": "The future of the ecosystem",
+                "layout_type": "hero_metric",
+                "cards": [{"title": "FUTURE", "bullets": ["Global Impact", "Next Frontier"]}],
+                "narration": "What was once an impossible threshold is now the new baseline, opening up unprecedented possibilities for the next era.",
+                "broll_beats": [
+                    {"phrase": "What was once an impossible threshold is now the new baseline", "search_query": "city skyline dawn golden hour aerial 4k", "ai_prompt": "Aerial modern city skyline sunrise golden hour", "camera": "zoom_out"},
+                    {"phrase": "opening up unprecedented possibilities for the next era", "search_query": "satellite orbiting earth sunrise horizon space", "ai_prompt": "Earth orbit sunrise satellite solar panels glistening", "camera": "zoom_in"}
+                ]
+            }
+        ]
+        return self.sanitize_screenplay({
+            "video_title": title,
+            "theme_palette": {"bg": [15, 23, 42], "accent": [59, 130, 246], "secondary": [148, 163, 184], "card_bg": [30, 41, 59]},
+            "visual_policy": "Clean enterprise Vox documentary style",
+            "soundscape": {"ambient_track": "server_room", "soundscape_playlist": [{"type": "server_room", "volume": 0.12}]},
+            "youtube_metadata": {
+                "description": f"Documentary analysis exploring {clean_prompt}.",
+                "tags": ["Technology", "Engineering", "Architecture", "Software", "Innovation"]
+            },
+            "scenes": scenes
+        })
 
     @staticmethod
     def sanitize_screenplay(screenplay: Dict[str, Any]) -> Dict[str, Any]:

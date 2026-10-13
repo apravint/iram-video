@@ -3,6 +3,7 @@ import re
 import time
 from typing import Dict, Any, List
 from google import genai
+from google.genai import types
 from .director import FALLBACK_MODELS
 
 FILM_DIRECTOR_SYSTEM_PROMPT = """

@@ -24,7 +24,9 @@ NEGATIVE_NOISE_TERMS = [
     "book", "cover", "tarot", "card", "poster", "pamphlet", "sculpture", "figurine", "stamp", "coin",
     "text", "document", "newspaper", "article", "statue", "tombstone", "grave", "manuscript", "plaque",
     "diagram", "leaflet", "signage", "banner", "dreary", "democracy", "politics", "political", "election",
-    "receipt", "bill", "invoice", "protest", "flyer", "paperback", "monument", "memorial"
+    "receipt", "bill", "invoice", "protest", "flyer", "paperback", "monument", "memorial",
+    "garment", "clothing", "swimwear", "swimsuit", "underwear", "shorts", "trousers",
+    "makeup", "cosmetics", "eyeshadow", "lipstick", "manicure", "pedicure", "nail polish", "skincare", "beauty product", "eyeliner", "mascara"
 ]
 
 NEGATIVE_GEO_NOISE = [
@@ -52,6 +54,37 @@ TAMIL_TO_ENGLISH_MAP = {
     'இயற்பியல்': 'Physics',
     'விஞ்ஞானம்': 'Science',
     'இயற்கை': 'Nature',
+    'தோல்வி': 'struggle overcome failure',
+    'வெற்றி': 'success victory achievement',
+    'விடாமுயற்சி': 'perseverance discipline focus',
+    'முயற்சி': 'effort discipline hard work',
+    'உழைப்பு': 'hard work athlete training',
+    'கனவு': 'dreams vision horizon',
+    'நம்பிக்கை': 'hope confidence courage',
+    'துணிச்சல்': 'courage boldness strength',
+    'எழுச்சி': 'rise sunrise strength',
+    'பாடல்': 'music anthem inspiration',
+    'வாழ்க்கை': 'life journey traveler',
+    'பாதை': 'path road journey',
+    'இலக்கு': 'goal target focus achievement',
+    'சிகரம்': 'mountain peak summit conquer victory',
+    'ஓடு': 'running sprinter athlete race',
+    'தடை': 'obstacle challenge struggle breakthrough',
+    'பயணம்': 'journey traveler pathway road',
+    'அடி': 'first step sprinter starting blocks action',
+    'துவங்கு': 'start begin journey step',
+    'தொடங்கு': 'start begin journey step',
+    'கைவிடாதே': 'never give up persevere warrior',
+    'உயரம்': 'high altitude mountain peak horizon',
+    'வீரம்': 'courage warrior strength bravery',
+    'சக்தி': 'power strength energy',
+    'வெல்': 'win conquer victory champion',
+    'நெருப்பு': 'fire burning torch flame passion',
+    'சிங்கம்': 'lion predator strength courage',
+    'சூரியன்': 'sunrise golden hour dawn sunbeam',
+    'மலை': 'mountain climb summit cliff peak',
+    'கடல்': 'ocean waves storm horizon',
+    'வானம்': 'sky clouds eagle soaring flight',
 }
 
 class MediaFetcher:
@@ -125,7 +158,8 @@ class MediaFetcher:
         words = [w for w in clean.split() if re.match(r'^[a-zA-Z]+$', w) and len(w) > 2]
         stopwords = {
             'the', 'and', 'for', 'with', 'from', 'about', 'how', 'why', 'what', 'launch',
-            'phase', 'update', 'video', 'tamil', 'english', 'full', 'latest', 'news', 'project'
+            'phase', 'update', 'video', 'tamil', 'english', 'full', 'latest', 'news', 'project',
+            'shorts', 'short', 'reel', 'reels', 'tiktok', 'youtube'
         }
         informative = [w for w in words if w.lower() not in stopwords]
 
@@ -138,7 +172,7 @@ class MediaFetcher:
 
         if tamil_found:
             return ' '.join(tamil_found)
-        return words[0] if words else ""
+        return ""
 
     @classmethod
     def is_noise_candidate(cls, title: str, query: str = "", topic: str = "") -> bool:
@@ -172,8 +206,8 @@ class MediaFetcher:
             return cls._topic_media_pool
 
         anchor = cls.extract_anchor_phrase(global_topic)
-        if not anchor:
-            anchor = global_topic
+        if not anchor or anchor.lower() in ("shorts", "short", "video", "reels", "reel", "youtube") or len(anchor.strip()) < 3:
+            return []
 
         print(f"   🔍 [Asset Curator] Pre-fetching verified media pool for topic anchor: \"{anchor}\"...")
         cls._topic_media_pool = []
@@ -551,6 +585,14 @@ class MediaFetcher:
         that stock engines index effectively.
         """
         combined = f"{topic} {query}".lower()
+        combined_tamil_eng = [eng_v for tam_k, eng_v in TAMIL_TO_ENGLISH_MAP.items() if tam_k in combined]
+        if combined_tamil_eng:
+            combined = f"{combined} {' '.join(combined_tamil_eng)}".lower()
+
+        query_eng = query.lower()
+        query_tamil_eng = [eng_v for tam_k, eng_v in TAMIL_TO_ENGLISH_MAP.items() if tam_k in query_eng]
+        if query_tamil_eng:
+            query_eng = f"{query_eng} {' '.join(query_tamil_eng)}".lower()
 
         # Parse index from beat_id for shot variety across beats
         b_idx = 0
@@ -565,10 +607,11 @@ class MediaFetcher:
             "discipline", "motivation", "unstoppable", "mindset", "habit",
             "focus", "success", "willpower", "trap", "action", "results",
             "execution", "hesitation", "procrastination", "grind", "commit",
-            "fear", "bold", "courage", "brave", "anxiety", "conquer", "overcome"
+            "fear", "bold", "courage", "brave", "anxiety", "conquer", "overcome",
+            "victory", "runner", "athlete", "peak", "summit", "perseverance"
         ])
         if is_mindset:
-            if any(k in query.lower() for k in ["fear", "doubt", "anxious", "scared", "hesitat", "stuck", "comfort", "trap", "paraly", "wait"]):
+            if any(k in query_eng for k in ["fear", "doubt", "anxious", "scared", "hesitat", "stuck", "comfort", "trap", "paraly", "wait", "obstacle", "struggle", "failure"]):
                 shots = [
                     "stormy ocean waves crashing rocks",
                     "dark shadows dramatic silhouette standing",
@@ -579,7 +622,7 @@ class MediaFetcher:
                     "foggy mountain cliff edge",
                     "frosty glass window dawn",
                 ]
-            elif any(k in query.lower() for k in ["bold", "courage", "brave", "action", "leap", "jump", "start", "movement", "move", "first step"]):
+            elif any(k in query_eng for k in ["bold", "courage", "brave", "action", "leap", "jump", "start", "movement", "move", "first step", "step", "sprinter"]):
                 shots = [
                     "rock climber gripping cliff mountain peak",
                     "sprinter starting blocks athletic track",
@@ -591,7 +634,7 @@ class MediaFetcher:
                     "skydiver leaping open sky",
                     "trail runner forest morning sunbeams",
                 ]
-            elif any(k in query.lower() for k in ["compound", "result", "lifelong", "massive", "scale", "future", "victory", "extraordinary", "unstoppable", "conquer"]):
+            elif any(k in query_eng for k in ["compound", "result", "lifelong", "massive", "scale", "future", "victory", "extraordinary", "unstoppable", "conquer", "summit", "peak", "dreams"]):
                 shots = [
                     "mountain summit sunrise golden rays",
                     "runner raising arms finish line victory",
@@ -1010,7 +1053,7 @@ class MediaFetcher:
         topic_words = [w for w in re.findall(r'\b[a-zA-Z]{3,}\b', (global_topic or clean_q).lower()) if w not in stop_words]
 
         cinematic_fallbacks = [
-            "cinematic", "action", "focus", "nature", "city", "ocean waves", "dramatic lighting", "mountain sunrise", "running", "person"
+            "cinematic", "action", "athlete workout", "nature landscape", "city skyline dawn", "ocean waves", "dramatic lighting", "mountain sunrise", "running athlete", "person walking"
         ]
         fallback_queries = []
         if len(topic_words) >= 2:

@@ -160,7 +160,7 @@ class FilmCompiler:
             fc = (
                 f"[0:v]zoompan=z='min(zoom+0.0002,1.025)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
                 f"{sprite_chain};"
-                f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=3:allf=g[vfinal];"
+                f"[v_comp]format=yuv420p[vfinal];"
                 f"[2:a]bass=g=3:f=110,equalizer=f=3200:t=q:w=1:g=2[a_speech];"
                 f"[3:a]volume={sfx_vol}[a_sfx];"
                 f"[a_speech][a_sfx]amix=inputs=2:duration=first:dropout_transition=2[afinal]"
@@ -184,7 +184,7 @@ class FilmCompiler:
             fc = (
                 f"[0:v]zoompan=z='min(zoom+0.0002,1.025)':d={d_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=24[v_bg];"
                 f"{sprite_chain};"
-                f"[v_comp]colorbalance=rs=0.08:gs=-0.04:bs=-0.08:rm=-0.04:gm=0.0:bm=0.12:rh=-0.04:gh=0.04:bh=0.18,noise=alls=3:allf=g[vfinal]"
+                f"[v_comp]format=yuv420p[vfinal]"
             )
             cmd = [
                 "ffmpeg", "-y",
